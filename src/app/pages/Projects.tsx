@@ -13,6 +13,7 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newStatus, setNewStatus] = useState("active");
 
@@ -42,6 +43,7 @@ export default function ProjectsPage() {
       setProjects((prev) => [created, ...prev]);
       setNewName("");
       setNewStatus("active");
+      setShowCreate(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create project.");
     }
@@ -57,7 +59,16 @@ export default function ProjectsPage() {
   return (
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-        <h2 className="text-lg font-semibold text-slate-900">Project Portfolio</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-slate-900">Project Portfolio</h2>
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+          >
+            New Project
+          </button>
+        </div>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -74,30 +85,6 @@ export default function ProjectsPage() {
           <p className="text-2xl font-semibold text-slate-900">{summary.done}</p>
         </article>
       </div>
-
-      <form onSubmit={onCreate} className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="grid gap-3 md:grid-cols-[2fr_1fr_auto]">
-          <input
-            type="text"
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            placeholder="Project name"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
-          />
-          <select
-            value={newStatus}
-            onChange={(event) => setNewStatus(event.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
-          >
-            <option value="active">active</option>
-            <option value="done">done</option>
-            <option value="blocked">blocked</option>
-          </select>
-          <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-            Create
-          </button>
-        </div>
-      </form>
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       {loading ? <p className="text-sm text-slate-600">Loading projects...</p> : null}
@@ -128,6 +115,45 @@ export default function ProjectsPage() {
           </table>
         </div>
       </div>
+
+      {showCreate ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-4">
+          <form onSubmit={onCreate} className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-slate-900">Create Project</h3>
+            <p className="mt-1 text-sm text-slate-600">Add a new project in your tenant workspace.</p>
+            <div className="mt-4 grid gap-3">
+              <input
+                type="text"
+                value={newName}
+                onChange={(event) => setNewName(event.target.value)}
+                placeholder="Project name"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+              />
+              <select
+                value={newStatus}
+                onChange={(event) => setNewStatus(event.target.value)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+              >
+                <option value="active">active</option>
+                <option value="done">done</option>
+                <option value="blocked">blocked</option>
+              </select>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+              >
+                Cancel
+              </button>
+              <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+                Create
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </section>
   );
 }

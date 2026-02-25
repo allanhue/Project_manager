@@ -13,6 +13,7 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState("todo");
   const [priority, setPriority] = useState("medium");
@@ -44,6 +45,7 @@ export default function TasksPage() {
       setTitle("");
       setStatus("todo");
       setPriority("medium");
+      setShowCreate(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create task.");
     }
@@ -52,42 +54,20 @@ export default function TasksPage() {
   return (
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-        <h2 className="text-lg font-semibold text-slate-900">Task Board</h2>
-        <p className="text-sm text-slate-600">Create and monitor tasks per tenant from live backend endpoints.</p>
-      </header>
-
-      <form onSubmit={onCreate} className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_auto]">
-          <input
-            type="text"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="Task title"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
-          />
-          <select
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Task Board</h2>
+            <p className="text-sm text-slate-600">Create and monitor tasks per tenant from live backend endpoints.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
           >
-            <option value="todo">todo</option>
-            <option value="in_progress">in_progress</option>
-            <option value="done">done</option>
-          </select>
-          <select
-            value={priority}
-            onChange={(event) => setPriority(event.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
-          >
-            <option value="low">low</option>
-            <option value="medium">medium</option>
-            <option value="high">high</option>
-          </select>
-          <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-            Add Task
+            New Task
           </button>
         </div>
-      </form>
+      </header>
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       {loading ? <p className="text-sm text-slate-600">Loading tasks...</p> : null}
@@ -118,6 +98,54 @@ export default function TasksPage() {
           </table>
         </div>
       </div>
+
+      {showCreate ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-4">
+          <form onSubmit={onCreate} className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-slate-900">Create Task</h3>
+            <p className="mt-1 text-sm text-slate-600">Add a new task to your tenant board.</p>
+            <div className="mt-4 grid gap-3">
+              <input
+                type="text"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Task title"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+              />
+              <select
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+              >
+                <option value="todo">todo</option>
+                <option value="in_progress">in_progress</option>
+                <option value="done">done</option>
+              </select>
+              <select
+                value={priority}
+                onChange={(event) => setPriority(event.target.value)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+              >
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+              >
+                Cancel
+              </button>
+              <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+                Add Task
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </section>
   );
 }
