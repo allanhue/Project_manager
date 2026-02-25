@@ -37,10 +37,12 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			email TEXT NOT NULL,
 			password_hash TEXT NOT NULL,
 			role TEXT NOT NULL DEFAULT 'org_admin',
+			last_login_at TIMESTAMPTZ,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE (tenant_id, email)
 		);
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'org_admin';
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 
 		CREATE TABLE IF NOT EXISTS projects (
 			id BIGSERIAL PRIMARY KEY,
@@ -52,6 +54,21 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 
 		CREATE INDEX IF NOT EXISTS idx_projects_tenant_id ON projects (tenant_id);
 		CREATE INDEX IF NOT EXISTS idx_users_tenant_email ON users (tenant_id, email);
+
+		CREATE TABLE IF NOT EXISTS system_logs (
+			id BIGSERIAL PRIMARY KEY,
+			tenant_slug TEXT,
+			user_email TEXT,
+			role TEXT,
+			method TEXT NOT NULL,
+			path TEXT NOT NULL,
+			status_code INT NOT NULL,
+			latency_ms BIGINT NOT NULL DEFAULT 0,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs (created_at DESC);
+		CREATE INDEX IF NOT EXISTS idx_system_logs_tenant_slug ON system_logs (tenant_slug);
 	`)
 	return err
 }

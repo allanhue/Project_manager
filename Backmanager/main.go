@@ -63,7 +63,7 @@ func main() {
 	}
 
 	api := r.Group("/api/v1")
-	api.Use(routes.AuthMiddleware(svc.JWTSecret, svc.JWTIssuer))
+	api.Use(routes.AuthMiddleware(svc.JWTSecret, svc.JWTIssuer), svc.AuditLogMiddleware())
 	{
 		api.GET("/projects", svc.ListProjects)
 		api.POST("/projects", svc.CreateProject)
@@ -78,6 +78,10 @@ func main() {
 	{
 		system.GET("/organizations", svc.SystemOrganizations)
 		system.GET("/analytics", svc.SystemAnalytics)
+		system.GET("/logs", svc.SystemLogs)
+		system.GET("/tenants", svc.SystemTenants)
+		system.POST("/tenants", svc.CreateTenant)
+		system.PUT("/tenants/:id", svc.UpdateTenant)
 	}
 
 	port := os.Getenv("PORT")

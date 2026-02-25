@@ -141,6 +141,7 @@ func (s *Service) Login(c *gin.Context) {
 		_, _ = s.DB.Exec(c.Request.Context(), `UPDATE users SET role = $1 WHERE id = $2`, desiredRole, userID)
 		role = desiredRole
 	}
+	_, _ = s.DB.Exec(c.Request.Context(), `UPDATE users SET last_login_at = NOW() WHERE id = $1`, userID)
 
 	token, err := s.issueToken(userID, req.TenantSlug, req.Email, name, tenantName, role)
 	if err != nil {
