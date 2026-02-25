@@ -6,7 +6,7 @@ param(
   [string]$OrgAdminEmail = "org.admin@acme.com",
   [string]$OrgAdminPassword = "Passw0rd!",
   [string]$SystemAdminName = "System Admin",
-  [string]$SystemAdminEmail = "centralhype9@gmail.com",
+  [string]$SystemAdminEmail = "allan@acme.com",
   [string]$SystemAdminPassword = "Passw0rd!",
   [switch]$RegisterSystemAdminIfMissing = $true
 )

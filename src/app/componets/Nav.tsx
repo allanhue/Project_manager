@@ -14,10 +14,11 @@ type NavProps = {
   currentPage: PageKey;
   onNavigate: (page: PageKey) => void;
   userName: string;
+  canViewAdmin: boolean;
   onLogout: () => void;
 };
 
-export function Nav({ currentPage, onNavigate, userName, onLogout }: NavProps) {
+export function Nav({ currentPage, onNavigate, userName, canViewAdmin, onLogout }: NavProps) {
   const pageList: Array<{ key: PageKey; label: string }> = [
     { key: "dashboard", label: "Dashboard" },
     { key: "projects", label: "Projects" },
@@ -25,8 +26,8 @@ export function Nav({ currentPage, onNavigate, userName, onLogout }: NavProps) {
     { key: "analytics", label: "Analytics" },
     { key: "profile", label: "Profile" },
     { key: "settings", label: "Settings" },
-    { key: "admin", label: "Admin" },
   ];
+  if (canViewAdmin) pageList.push({ key: "admin", label: "Admin" });
 
   return (
     <header className="border-b border-slate-200 bg-white px-4 py-4 md:px-6">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { getSystemAnalytics, getSystemOrganizations, sendTestNotification, SystemAnalytics, SystemOrganization } from "../auth/auth";
 
 export default function SystemAdminHome() {
@@ -8,6 +8,10 @@ export default function SystemAdminHome() {
   const [organizations, setOrganizations] = useState<SystemOrganization[]>([]);
   const [error, setError] = useState("");
   const [mailStatus, setMailStatus] = useState("");
+  const [showMailModal, setShowMailModal] = useState(false);
+  const [email, setEmail] = useState("");
+  const [subject, setSubject] = useState("System support notification");
+  const [message, setMessage] = useState("Hello, this is a support notification from system administration.");
 
   useEffect(() => {
     let mounted = true;
@@ -26,6 +30,18 @@ export default function SystemAdminHome() {
       mounted = false;
     };
   }, []);
+
+  async function onSend(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      setMailStatus("Sending...");
+      await sendTestNotification({ email, subject, message });
+      setMailStatus("System notification sent.");
+      setShowMailModal(false);
+    } catch (err) {
+      setMailStatus(err instanceof Error ? err.message : "Failed to send system notification.");
+    }
+  }
 
   return (
     <section className="space-y-4">
@@ -87,21 +103,59 @@ export default function SystemAdminHome() {
         <h3 className="mb-2 text-sm font-semibold text-slate-900">System Notifications</h3>
         <button
           type="button"
-          onClick={async () => {
-            try {
-              setMailStatus("Sending...");
-              await sendTestNotification({ subject: "System admin monitor", message: "System admin notification channel is active." });
-              setMailStatus("System notification sent.");
-            } catch (err) {
-              setMailStatus(err instanceof Error ? err.message : "Failed to send system notification.");
-            }
-          }}
+          onClick={() => setShowMailModal(true)}
           className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
         >
-          Send System Test Email
+          Compose Support Email
         </button>
         {mailStatus ? <p className="mt-2 text-sm text-slate-600">{mailStatus}</p> : null}
       </div>
+
+      {showMailModal ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-4">
+          <form onSubmit={onSend} className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-slate-900">Send Support Email</h3>
+            <p className="mt-1 text-sm text-slate-600">Send a direct support notification to an organization administrator.</p>
+            <div className="mt-4 grid gap-3">
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Recipient email (optional)"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+              />
+              <input
+                type="text"
+                required
+                value={subject}
+                onChange={(event) => setSubject(event.target.value)}
+                placeholder="Subject"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+              />
+              <textarea
+                required
+                rows={6}
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                placeholder="Message body"
+                className="resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+              />
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowMailModal(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+              >
+                Cancel
+              </button>
+              <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+                Send
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </section>
   );
 }

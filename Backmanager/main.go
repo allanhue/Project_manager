@@ -45,6 +45,9 @@ func main() {
 	if err := svc.EnsureTasksTable(); err != nil {
 		log.Fatalf("tasks schema init failed: %v", err)
 	}
+	if err := svc.EnsureSystemAdminRoles(context.Background()); err != nil {
+		log.Fatalf("system-admin role sync failed: %v", err)
+	}
 
 	r := gin.Default()
 	r.Use(corsConfigFromEnv())
@@ -67,6 +70,7 @@ func main() {
 		api.GET("/tasks", svc.ListTasks)
 		api.POST("/tasks", svc.CreateTask)
 		api.POST("/notifications/test", svc.TestNotification)
+		api.POST("/support/request", svc.SupportRequest)
 	}
 
 	system := api.Group("/system")

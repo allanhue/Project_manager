@@ -138,6 +138,17 @@ export function logout() {
   window.localStorage.removeItem(SESSION_KEY);
 }
 
+export function updateCurrentUser(patch: Partial<Pick<AuthUser, "name">>) {
+  const session = readSession();
+  if (!session) return;
+  const nextUser: AuthUser = {
+    ...session.user,
+    ...patch,
+    name: (patch.name ?? session.user.name).trim() || session.user.name,
+  };
+  writeSession({ ...session, user: nextUser });
+}
+
 export async function registerUser(input: RegisterInput): Promise<{ ok: true; user: AuthUser } | { ok: false; message: string }> {
   try {
     const payload = await requestJSON<{
@@ -271,5 +282,18 @@ export async function sendTestNotification(input?: { email?: string; subject?: s
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(input || {}),
+  });
+}
+
+export async function sendSupportRequest(input: { subject: string; message: string; priority?: string }): Promise<{ status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ status: string }>("/api/v1/support/request", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
   });
 }

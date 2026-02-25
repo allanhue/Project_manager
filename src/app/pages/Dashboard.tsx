@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import AdminPage from "../admin/admin";
 import SystemAdminHome from "../admin/Home";
 import { AuthUser, getSession, logout } from "../auth/auth";
 import { Nav } from "../componets/Nav";
@@ -80,6 +79,7 @@ function DashboardOverview() {
 export default function Dashboard() {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState<PageKey>("dashboard");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
 
@@ -98,6 +98,8 @@ export default function Dashboard() {
     router.replace("/auth");
   }
 
+  const canViewAdmin = user?.role === "system_admin";
+
   const pageContent = useMemo(() => {
     if (currentPage === "projects") return <ProjectsPage />;
     if (currentPage === "tasks") return <TasksPage />;
@@ -106,10 +108,16 @@ export default function Dashboard() {
     if (currentPage === "settings") return <SettingsPage />;
     if (currentPage === "admin") {
       if (user?.role === "system_admin") return <SystemAdminHome />;
-      return <AdminPage />;
+      return <DashboardOverview />;
     }
     return <DashboardOverview />;
   }, [currentPage, user]);
+
+  useEffect(() => {
+    if (currentPage === "admin" && !canViewAdmin) {
+      setCurrentPage("dashboard");
+    }
+  }, [canViewAdmin, currentPage]);
 
   if (!ready) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-100 text-sm text-slate-600">Loading workspace...</div>;
@@ -117,9 +125,21 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen bg-slate-100 text-slate-900">
-      <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
+      <Sidebar
+        currentPage={currentPage}
+        onNavigate={setCurrentPage}
+        canViewAdmin={canViewAdmin}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Nav currentPage={currentPage} onNavigate={setCurrentPage} userName={user?.name || "User"} onLogout={handleLogout} />
+        <Nav
+          currentPage={currentPage}
+          onNavigate={setCurrentPage}
+          userName={user?.name || "User"}
+          canViewAdmin={canViewAdmin}
+          onLogout={handleLogout}
+        />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{pageContent}</main>
       </div>
     </div>
