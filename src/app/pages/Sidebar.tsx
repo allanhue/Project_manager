@@ -19,7 +19,6 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     <aside className="hidden w-72 flex-col border-r border-slate-200 bg-white md:flex">
       <div className="border-b border-slate-200 px-5 py-4">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">PulseForge</p>
-        <h2 className="mt-1 text-lg font-semibold text-slate-900">Project Space</h2>
       </div>
 
       <nav className="flex-1 px-3 py-4">

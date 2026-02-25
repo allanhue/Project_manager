@@ -10,7 +10,6 @@ export default function AnalyticsPage() {
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
         <h2 className="text-lg font-semibold text-slate-900">Analytics</h2>
-        <p className="text-sm text-slate-600">Quick delivery insights inspired by Zoho-style project dashboards.</p>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

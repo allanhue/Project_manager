@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# go binaries
+Backmanager/*.exe
+Backmanager/backmanager

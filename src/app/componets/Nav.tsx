@@ -18,7 +18,6 @@ export function Nav({ currentPage }: NavProps) {
     <header className="border-b border-slate-200 bg-white px-6 py-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Zoho-Style Workspace</p>
           <h1 className="text-lg font-semibold text-slate-900">{titles[currentPage]}</h1>
         </div>
         <div className="flex items-center gap-3">
