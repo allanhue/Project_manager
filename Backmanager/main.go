@@ -35,11 +35,15 @@ func main() {
 		jwtIssuer = "backmanager"
 	}
 	jwtTTLHours := getEnvInt("JWT_TTL_HOURS", 24)
+	systemAdmins := splitCSV(os.Getenv("SYSTEM_ADMIN_EMAILS"))
 
-	svc := routes.NewService(db, []byte(jwtSecret), jwtIssuer, time.Duration(jwtTTLHours)*time.Hour)
+	svc := routes.NewService(db, []byte(jwtSecret), jwtIssuer, time.Duration(jwtTTLHours)*time.Hour, systemAdmins)
 
 	if err := svc.EnsureBaseTables(context.Background()); err != nil {
 		log.Fatalf("schema init failed: %v", err)
+	}
+	if err := svc.EnsureTasksTable(); err != nil {
+		log.Fatalf("tasks schema init failed: %v", err)
 	}
 
 	r := gin.Default()
@@ -60,6 +64,16 @@ func main() {
 	{
 		api.GET("/projects", svc.ListProjects)
 		api.POST("/projects", svc.CreateProject)
+		api.GET("/tasks", svc.ListTasks)
+		api.POST("/tasks", svc.CreateTask)
+		api.POST("/notifications/test", svc.TestNotification)
+	}
+
+	system := api.Group("/system")
+	system.Use(routes.RequireSystemAdmin())
+	{
+		system.GET("/organizations", svc.SystemOrganizations)
+		system.GET("/analytics", svc.SystemAnalytics)
 	}
 
 	port := os.Getenv("PORT")

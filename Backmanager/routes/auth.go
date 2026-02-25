@@ -96,6 +96,12 @@ func (s *Service) Register(c *gin.Context) {
 			"role":        role,
 		},
 	})
+
+	s.sendAsyncNotification(
+		req.Email,
+		"Welcome to PulseForge",
+		fmt.Sprintf("Hi %s, your %s workspace is ready. Role: %s.", req.Name, req.TenantName, role),
+	)
 }
 
 func (s *Service) Login(c *gin.Context) {
@@ -127,6 +133,12 @@ func (s *Service) Login(c *gin.Context) {
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
+	}
+
+	desiredRole := s.roleForEmail(req.Email)
+	if role != desiredRole {
+		_, _ = s.DB.Exec(c.Request.Context(), `UPDATE users SET role = $1 WHERE id = $2`, desiredRole, userID)
+		role = desiredRole
 	}
 
 	token, err := s.issueToken(userID, req.TenantSlug, req.Email, name, tenantName, role)

@@ -1,43 +1,122 @@
-const columns = [
-  {
-    title: "Backlog",
-    tasks: ["Setup tenant default roles", "Map activity log event model", "Define project template form"],
-  },
-  {
-    title: "In Progress",
-    tasks: ["Build projects list UI", "Implement task details panel", "Add sidebar filters"],
-  },
-  {
-    title: "Review",
-    tasks: ["Validate white theme contrast", "Review dashboard widget copy"],
-  },
-  {
-    title: "Done",
-    tasks: ["Create page-first implementation path", "Define component split strategy"],
-  },
-];
+"use client";
+
+import { FormEvent, useEffect, useState } from "react";
+import { createTask, listTasks, TaskItem } from "../auth/auth";
+
+function chipClass(status: string) {
+  if (status === "done") return "bg-emerald-50 text-emerald-700";
+  if (status === "in_progress") return "bg-sky-50 text-sky-700";
+  return "bg-slate-100 text-slate-700";
+}
 
 export default function TasksPage() {
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [title, setTitle] = useState("");
+  const [status, setStatus] = useState("todo");
+  const [priority, setPriority] = useState("medium");
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const items = await listTasks();
+        if (mounted) setTasks(items);
+      } catch (err) {
+        if (mounted) setError(err instanceof Error ? err.message : "Failed to load tasks.");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  async function onCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!title.trim()) return;
+    setError("");
+    try {
+      const item = await createTask({ title: title.trim(), status, priority });
+      setTasks((prev) => [item, ...prev]);
+      setTitle("");
+      setStatus("todo");
+      setPriority("medium");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create task.");
+    }
+  }
+
   return (
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
         <h2 className="text-lg font-semibold text-slate-900">Task Board</h2>
-        <p className="text-sm text-slate-600">Prioritize execution while you finish page and component layer first.</p>
+        <p className="text-sm text-slate-600">Create and monitor tasks per tenant from live backend endpoints.</p>
       </header>
 
-      <div className="grid gap-4 xl:grid-cols-4">
-        {columns.map((column) => (
-          <article key={column.title} className="rounded-xl border border-slate-200 bg-white p-4">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{column.title}</h3>
-            <ul className="space-y-2">
-              {column.tasks.map((task) => (
-                <li key={task} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                  {task}
-                </li>
+      <form onSubmit={onCreate} className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_auto]">
+          <input
+            type="text"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Task title"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+          />
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+          >
+            <option value="todo">todo</option>
+            <option value="in_progress">in_progress</option>
+            <option value="done">done</option>
+          </select>
+          <select
+            value={priority}
+            onChange={(event) => setPriority(event.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+          >
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+          </select>
+          <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+            Add Task
+          </button>
+        </div>
+      </form>
+
+      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {loading ? <p className="text-sm text-slate-600">Loading tasks...</p> : null}
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] text-left text-sm">
+            <thead className="text-slate-500">
+              <tr className="border-b border-slate-200">
+                <th className="px-2 py-2 font-medium">Task</th>
+                <th className="px-2 py-2 font-medium">Status</th>
+                <th className="px-2 py-2 font-medium">Priority</th>
+                <th className="px-2 py-2 font-medium">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map((task) => (
+                <tr key={task.id} className="border-b border-slate-100">
+                  <td className="px-2 py-3 font-medium text-slate-900">{task.title}</td>
+                  <td className="px-2 py-3">
+                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${chipClass(task.status)}`}>{task.status}</span>
+                  </td>
+                  <td className="px-2 py-3 text-slate-700">{task.priority}</td>
+                  <td className="px-2 py-3 text-slate-700">{new Date(task.created_at).toLocaleString()}</td>
+                </tr>
               ))}
-            </ul>
-          </article>
-        ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );

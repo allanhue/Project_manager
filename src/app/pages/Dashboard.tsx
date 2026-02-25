@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminPage from "../admin/admin";
+import SystemAdminHome from "../admin/Home";
 import { AuthUser, getSession, logout } from "../auth/auth";
 import { Nav } from "../componets/Nav";
 import AnalyticsPage from "./Analytics";
@@ -105,7 +106,10 @@ export default function Dashboard() {
     if (currentPage === "analytics") return <AnalyticsPage />;
     if (currentPage === "profile" && user) return <ProfilePage user={user} />;
     if (currentPage === "settings") return <SettingsPage />;
-    if (currentPage === "admin") return <AdminPage />;
+    if (currentPage === "admin") {
+      if (user?.role === "system_admin") return <SystemAdminHome />;
+      return <AdminPage />;
+    }
     return <DashboardOverview />;
   }, [currentPage, user]);
 

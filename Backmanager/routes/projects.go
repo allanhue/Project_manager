@@ -36,9 +36,11 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			name TEXT NOT NULL,
 			email TEXT NOT NULL,
 			password_hash TEXT NOT NULL,
+			role TEXT NOT NULL DEFAULT 'org_admin',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE (tenant_id, email)
 		);
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'org_admin';
 
 		CREATE TABLE IF NOT EXISTS projects (
 			id BIGSERIAL PRIMARY KEY,
@@ -104,4 +106,10 @@ func (s *Service) CreateProject(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, p)
+
+	s.sendAsyncNotification(
+		emailFromContext(c),
+		"Project created",
+		"Your project '"+p.Name+"' was created successfully.",
+	)
 }

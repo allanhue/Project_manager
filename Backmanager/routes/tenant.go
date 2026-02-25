@@ -11,6 +11,7 @@ import (
 const tenantCtxKey = "tenant_id"
 const userCtxKey = "user_id"
 const roleCtxKey = "role"
+const emailCtxKey = "email"
 
 func AuthMiddleware(secret []byte, issuer string) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -54,12 +55,14 @@ func AuthMiddleware(secret []byte, issuer string) gin.HandlerFunc {
 		}
 
 		userID, _ := claims["sub"].(string)
+		email, _ := claims["email"].(string)
 		role, _ := claims["role"].(string)
 		if role == "" {
 			role = "org_admin"
 		}
 		c.Set(tenantCtxKey, tenantID)
 		c.Set(userCtxKey, userID)
+		c.Set(emailCtxKey, email)
 		c.Set(roleCtxKey, role)
 		c.Next()
 	}
@@ -91,4 +94,13 @@ func RequireSystemAdmin() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func emailFromContext(c *gin.Context) string {
+	v, ok := c.Get(emailCtxKey)
+	if !ok {
+		return ""
+	}
+	email, _ := v.(string)
+	return email
 }

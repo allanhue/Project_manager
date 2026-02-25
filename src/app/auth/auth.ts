@@ -4,6 +4,7 @@ export type AuthUser = {
   email: string;
   tenantSlug: string;
   tenantName?: string;
+  role: "system_admin" | "org_admin";
 };
 
 export type AuthSession = {
@@ -34,6 +35,31 @@ export type Project = {
   name: string;
   status: string;
   created_at: string;
+};
+
+export type TaskItem = {
+  id: number;
+  tenant_id: string;
+  project_id?: number | null;
+  title: string;
+  status: string;
+  priority: string;
+  created_at: string;
+};
+
+export type SystemOrganization = {
+  tenant_slug: string;
+  tenant_name: string;
+  user_count: number;
+  project_count: number;
+  task_count: number;
+};
+
+export type SystemAnalytics = {
+  tenant_count: number;
+  user_count: number;
+  project_count: number;
+  task_count: number;
 };
 
 function parseJwtClaims(token: string): Record<string, unknown> {
@@ -81,12 +107,16 @@ function userFromToken(token: string): AuthUser {
   const claims = parseJwtClaims(token);
   const email = String(claims.email || "");
   const tenantSlug = String(claims.tenant_id || "");
+  const tenantName = String(claims.tenant_name || "");
   const id = String(claims.sub || "");
+  const role = String(claims.role || "org_admin") as "system_admin" | "org_admin";
   const nameFromEmail = email.includes("@") ? email.split("@")[0] : "User";
   return {
     id,
     email,
     tenantSlug,
+    tenantName,
+    role,
     name: nameFromEmail,
   };
 }
@@ -131,6 +161,7 @@ export async function registerUser(input: RegisterInput): Promise<{ ok: true; us
       email: payload.user.email,
       tenantSlug: payload.user.tenant_slug,
       tenantName: input.tenantName,
+      role: (payload.user as { role?: "system_admin" | "org_admin" }).role || "org_admin",
     };
     writeSession({ token: payload.token, user });
     return { ok: true, user };
@@ -141,7 +172,10 @@ export async function registerUser(input: RegisterInput): Promise<{ ok: true; us
 
 export async function loginUser(input: LoginInput): Promise<{ ok: true; user: AuthUser } | { ok: false; message: string }> {
   try {
-    const payload = await requestJSON<{ token: string }>("/api/v1/auth/login", {
+    const payload = await requestJSON<{
+      token: string;
+      user?: { name?: string; tenant_name?: string; role?: "system_admin" | "org_admin" };
+    }>("/api/v1/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -152,6 +186,9 @@ export async function loginUser(input: LoginInput): Promise<{ ok: true; user: Au
     });
 
     const user = userFromToken(payload.token);
+    if (payload.user?.name) user.name = payload.user.name;
+    if (payload.user?.tenant_name) user.tenantName = payload.user.tenant_name;
+    if (payload.user?.role) user.role = payload.user.role;
     writeSession({ token: payload.token, user });
     return { ok: true, user };
   } catch (error) {
@@ -179,5 +216,60 @@ export async function createProject(input: { name: string; status?: string }): P
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(input),
+  });
+}
+
+export async function listTasks(): Promise<TaskItem[]> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: TaskItem[] }>("/api/v1/tasks", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return payload.items || [];
+}
+
+export async function createTask(input: { title: string; status?: string; priority?: string; project_id?: number | null }): Promise<TaskItem> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<TaskItem>("/api/v1/tasks", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getSystemOrganizations(): Promise<SystemOrganization[]> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: SystemOrganization[] }>("/api/v1/system/organizations", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return payload.items || [];
+}
+
+export async function getSystemAnalytics(): Promise<SystemAnalytics> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<SystemAnalytics>("/api/v1/system/analytics", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function sendTestNotification(input?: { email?: string; subject?: string; message?: string }): Promise<{ status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ status: string }>("/api/v1/notifications/test", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input || {}),
   });
 }
