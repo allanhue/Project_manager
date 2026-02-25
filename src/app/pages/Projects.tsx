@@ -120,7 +120,7 @@ export default function ProjectsPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-4">
           <form onSubmit={onCreate} className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
             <h3 className="text-base font-semibold text-slate-900">Create Project</h3>
-            <p className="mt-1 text-sm text-slate-600">Add a new project in your tenant workspace.</p>
+            <p className="mt-1 text-sm text-slate-600">Capture client work, billing stage and delivery status quickly.</p>
             <div className="mt-4 grid gap-3">
               <input
                 type="text"

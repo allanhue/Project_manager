@@ -49,8 +49,8 @@ export default function AnalyticsPage() {
   return (
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-        <h2 className="text-lg font-semibold text-slate-900">Analytics</h2>
-        <p className="text-sm text-slate-600">Advanced live metrics based on backend project records.</p>
+        <h2 className="text-lg font-semibold text-slate-900">Finance and Delivery Analytics</h2>
+        <p className="text-sm text-slate-600">Track performance, execution health and operational trends in one view.</p>
       </header>
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
@@ -58,26 +58,26 @@ export default function AnalyticsPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <article className="rounded-xl border border-slate-200 bg-white px-4 py-4">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Total Projects</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Active Engagements</p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">{analytics.total}</p>
         </article>
         <article className="rounded-xl border border-slate-200 bg-white px-4 py-4">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Completion Rate</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Completion Ratio</p>
           <p className="mt-2 text-2xl font-semibold text-emerald-700">{analytics.completion}%</p>
         </article>
         <article className="rounded-xl border border-slate-200 bg-white px-4 py-4">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Active Rate</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Execution Ratio</p>
           <p className="mt-2 text-2xl font-semibold text-sky-700">{analytics.activeRate}%</p>
         </article>
         <article className="rounded-xl border border-slate-200 bg-white px-4 py-4">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Blocker Rate</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Risk Ratio</p>
           <p className="mt-2 text-2xl font-semibold text-amber-700">{analytics.blockerRate}%</p>
         </article>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
         <article className="rounded-xl border border-slate-200 bg-white p-5">
-          <h3 className="mb-3 text-sm font-semibold text-slate-900">Status Distribution</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Operational Distribution</h3>
           <div className="space-y-3">
             {[
               { label: "Done", value: analytics.done, color: "bg-emerald-500" },
@@ -98,11 +98,11 @@ export default function AnalyticsPage() {
         </article>
 
         <article className="rounded-xl border border-slate-200 bg-white p-5">
-          <h3 className="mb-3 text-sm font-semibold text-slate-900">Insights</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Executive Insights</h3>
           <ul className="space-y-2 text-sm text-slate-700">
-            <li className="rounded-lg bg-slate-50 px-3 py-2">Projects completed: {analytics.done}</li>
-            <li className="rounded-lg bg-slate-50 px-3 py-2">Projects in execution: {analytics.active}</li>
-            <li className="rounded-lg bg-slate-50 px-3 py-2">Blocked pipelines: {analytics.blocked}</li>
+            <li className="rounded-lg bg-slate-50 px-3 py-2">Completed workstreams: {analytics.done}</li>
+            <li className="rounded-lg bg-slate-50 px-3 py-2">In-progress engagements: {analytics.active}</li>
+            <li className="rounded-lg bg-slate-50 px-3 py-2">At-risk pipelines: {analytics.blocked}</li>
           </ul>
         </article>
       </div>

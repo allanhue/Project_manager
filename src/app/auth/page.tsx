@@ -58,7 +58,6 @@ export default function AuthPage() {
         </div>
 
         <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-        <p className="mt-1 text-sm text-slate-600">Authenticate using your Go backend and tenant context.</p>
 
         <label className="mt-4 block text-sm font-medium text-slate-700">Tenant Slug</label>
         <input
