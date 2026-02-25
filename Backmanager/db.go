@@ -20,7 +20,6 @@ func connectDB(ctx context.Context) (*pgxpool.Pool, error) {
 		dsn = os.Getenv("PSQL_URL")
 	}
 	if dsn == "" {
-		// Keep backward compatibility with your current env key.
 		dsn = os.Getenv("psql")
 	}
 	if dsn == "" {

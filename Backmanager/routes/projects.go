@@ -1,4 +1,4 @@
-package main
+package routes
 
 import (
 	"context"
@@ -21,8 +21,25 @@ type createProjectRequest struct {
 	Status string `json:"status"`
 }
 
-func (a *App) ensureBaseTables(ctx context.Context) error {
-	_, err := a.DB.Exec(ctx, `
+func (s *Service) EnsureBaseTables(ctx context.Context) error {
+	_, err := s.DB.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS tenants (
+			id BIGSERIAL PRIMARY KEY,
+			slug TEXT NOT NULL UNIQUE,
+			name TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE TABLE IF NOT EXISTS users (
+			id BIGSERIAL PRIMARY KEY,
+			tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			name TEXT NOT NULL,
+			email TEXT NOT NULL,
+			password_hash TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (tenant_id, email)
+		);
+
 		CREATE TABLE IF NOT EXISTS projects (
 			id BIGSERIAL PRIMARY KEY,
 			tenant_id TEXT NOT NULL,
@@ -30,14 +47,16 @@ func (a *App) ensureBaseTables(ctx context.Context) error {
 			status TEXT NOT NULL DEFAULT 'active',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
+
 		CREATE INDEX IF NOT EXISTS idx_projects_tenant_id ON projects (tenant_id);
+		CREATE INDEX IF NOT EXISTS idx_users_tenant_email ON users (tenant_id, email);
 	`)
 	return err
 }
 
-func (a *App) ListProjects(c *gin.Context) {
+func (s *Service) ListProjects(c *gin.Context) {
 	tenantID := tenantFromContext(c)
-	rows, err := a.DB.Query(c.Request.Context(), `
+	rows, err := s.DB.Query(c.Request.Context(), `
 		SELECT id, tenant_id, name, status, created_at
 		FROM projects
 		WHERE tenant_id = $1
@@ -62,7 +81,7 @@ func (a *App) ListProjects(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"items": projects})
 }
 
-func (a *App) CreateProject(c *gin.Context) {
+func (s *Service) CreateProject(c *gin.Context) {
 	tenantID := tenantFromContext(c)
 	var req createProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -74,7 +93,7 @@ func (a *App) CreateProject(c *gin.Context) {
 	}
 
 	var p Project
-	err := a.DB.QueryRow(c.Request.Context(), `
+	err := s.DB.QueryRow(c.Request.Context(), `
 		INSERT INTO projects (tenant_id, name, status)
 		VALUES ($1, $2, $3)
 		RETURNING id, tenant_id, name, status, created_at

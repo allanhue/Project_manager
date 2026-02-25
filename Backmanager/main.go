@@ -5,19 +5,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	"backmanager/routes"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-type App struct {
-	DB        *pgxpool.Pool
-	JWTSecret []byte
-	JWTIssuer string
-	JWTTTL    time.Duration
-}
 
 func main() {
 	_ = godotenv.Load()
@@ -41,18 +36,14 @@ func main() {
 	}
 	jwtTTLHours := getEnvInt("JWT_TTL_HOURS", 24)
 
-	app := &App{
-		DB:        db,
-		JWTSecret: []byte(jwtSecret),
-		JWTIssuer: jwtIssuer,
-		JWTTTL:    time.Duration(jwtTTLHours) * time.Hour,
-	}
+	svc := routes.NewService(db, []byte(jwtSecret), jwtIssuer, time.Duration(jwtTTLHours)*time.Hour)
 
-	if err := app.ensureBaseTables(context.Background()); err != nil {
+	if err := svc.EnsureBaseTables(context.Background()); err != nil {
 		log.Fatalf("schema init failed: %v", err)
 	}
 
 	r := gin.Default()
+	r.Use(corsConfigFromEnv())
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -60,15 +51,15 @@ func main() {
 
 	auth := r.Group("/api/v1/auth")
 	{
-		auth.POST("/register", app.Register)
-		auth.POST("/login", app.Login)
+		auth.POST("/register", svc.Register)
+		auth.POST("/login", svc.Login)
 	}
 
 	api := r.Group("/api/v1")
-	api.Use(AuthMiddleware(app.JWTSecret, app.JWTIssuer))
+	api.Use(routes.AuthMiddleware(svc.JWTSecret, svc.JWTIssuer))
 	{
-		api.GET("/projects", app.ListProjects)
-		api.POST("/projects", app.CreateProject)
+		api.GET("/projects", svc.ListProjects)
+		api.POST("/projects", svc.CreateProject)
 	}
 
 	port := os.Getenv("PORT")
@@ -80,4 +71,43 @@ func main() {
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func corsConfigFromEnv() gin.HandlerFunc {
+	origins := splitCSV(os.Getenv("CORS_ALLOW_ORIGINS"))
+	if len(origins) == 0 {
+		origins = []string{"http://localhost:3000"}
+	}
+	methods := splitCSV(os.Getenv("CORS_ALLOW_METHODS"))
+	if len(methods) == 0 {
+		methods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+	}
+	headers := splitCSV(os.Getenv("CORS_ALLOW_HEADERS"))
+	if len(headers) == 0 {
+		headers = []string{"Origin", "Content-Type", "Authorization"}
+	}
+
+	cfg := cors.Config{
+		AllowOrigins:     origins,
+		AllowMethods:     methods,
+		AllowHeaders:     headers,
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}
+	return cors.New(cfg)
+}
+
+func splitCSV(v string) []string {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
