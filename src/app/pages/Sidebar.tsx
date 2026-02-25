@@ -84,29 +84,57 @@ const menu: Array<{ key: PageKey; label: string; hint: string; icon: ReactNode }
 type SidebarProps = {
   currentPage: PageKey;
   onNavigate: (page: PageKey) => void;
-  canViewAdmin: boolean;
+  role: "system_admin" | "org_admin";
+  isSystemAdmin: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
 };
 
-export function Sidebar({ currentPage, onNavigate, canViewAdmin, collapsed, onToggleCollapse }: SidebarProps) {
-  const visibleMenu = canViewAdmin ? menu : menu.filter((item) => item.key !== "admin");
+export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapsed, onToggleCollapse }: SidebarProps) {
+  const visibleMenu =
+    role === "system_admin"
+      ? menu.filter((item) => item.key === "dashboard" || item.key === "analytics" || item.key === "admin" || item.key === "settings")
+      : menu.filter((item) => item.key !== "admin");
+
+  function displayLabel(key: PageKey, fallback: string) {
+    if (role !== "system_admin") return fallback;
+    if (key === "dashboard") return "Dashboard";
+    if (key === "analytics") return "Analytics";
+    if (key === "admin") return "Support";
+    if (key === "settings") return "Configuration";
+    return fallback;
+  }
+
+  function displayHint(key: PageKey, fallback: string) {
+    if (role !== "system_admin") return fallback;
+    if (key === "dashboard") return "System overview";
+    if (key === "analytics") return "Detailed reports";
+    if (key === "admin") return "Technical issues";
+    if (key === "settings") return "Tenant setup";
+    return fallback;
+  }
 
   return (
-    <aside className={`hidden flex-col border-r border-slate-200 bg-white transition-all md:flex ${collapsed ? "w-20" : "w-72"}`}>
-      <div className={`border-b border-slate-200 py-3 ${collapsed ? "px-2" : "px-4"}`}>
+    <aside
+      className={`hidden flex-col transition-all md:flex ${collapsed ? "w-20" : "w-72"} ${
+        isSystemAdmin ? "border-r border-sky-200 bg-white text-slate-900 shadow-sm" : "border-r border-slate-200 bg-white"
+      }`}
+    >
+      <div className={`border-b py-3 ${collapsed ? "px-2" : "px-4"} ${isSystemAdmin ? "border-sky-200 bg-sky-50/70" : "border-slate-200"}`}>
         <div className="flex items-center justify-between">
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition ${
+              isSystemAdmin ? "border-sky-200 text-sky-700 hover:bg-sky-100" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <svg viewBox="0 0 24 24" className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M15 18l-6-6 6-6" />
             </svg>
           </button>
-          <p className={`text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 ${collapsed ? "sr-only" : ""}`}>PulseForge</p>
+          <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${isSystemAdmin ? "text-sky-700" : "text-slate-500"} ${collapsed ? "sr-only" : ""}`}>PulseForge</p>
         </div>
       </div>
 
@@ -121,18 +149,22 @@ export function Sidebar({ currentPage, onNavigate, canViewAdmin, collapsed, onTo
                   onClick={() => onNavigate(item.key)}
                   className={`w-full rounded-lg py-2 transition ${collapsed ? "px-2 text-center" : "px-3 text-left"} ${
                     isActive
-                      ? "bg-sky-50 text-sky-700 ring-1 ring-sky-200"
-                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                      ? isSystemAdmin
+                        ? "bg-sky-100 text-sky-900 ring-1 ring-sky-300"
+                        : "bg-sky-50 text-sky-700 ring-1 ring-sky-200"
+                      : isSystemAdmin
+                        ? "text-slate-700 hover:bg-sky-50 hover:text-slate-900"
+                        : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
                   {collapsed ? (
                     <span className="inline-flex items-center justify-center">{item.icon}</span>
                   ) : (
                     <div className="flex items-start gap-3">
-                      <span className="mt-0.5 inline-flex items-center justify-center text-slate-500">{item.icon}</span>
+                      <span className={`mt-0.5 inline-flex items-center justify-center ${isSystemAdmin ? "text-sky-700" : "text-slate-500"}`}>{item.icon}</span>
                       <span>
-                        <p className="text-sm font-medium">{item.label}</p>
-                        <p className="text-xs text-slate-500">{item.hint}</p>
+                        <p className="text-sm font-medium">{displayLabel(item.key, item.label)}</p>
+                        <p className={`text-xs ${isSystemAdmin ? "text-slate-500" : "text-slate-500"}`}>{displayHint(item.key, item.hint)}</p>
                       </span>
                     </div>
                   )}

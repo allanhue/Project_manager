@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import SystemConfigurationPage from "../admin/Configuration";
+import DashboardadminPage from "../admin/Dashboardadmin";
 import SystemAdminHome from "../admin/Home";
 import { AuthUser, getSession, logout } from "../auth/auth";
 import { Nav } from "../componets/Nav";
@@ -76,6 +78,39 @@ function DashboardOverview() {
   );
 }
 
+function SystemAdminDashboardPage() {
+  return (
+    <section className="space-y-5">
+      <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">System Dashboard</p>
+        <h1 className="mt-1 text-2xl font-semibold text-slate-900">Operations Control Center</h1>
+        <p className="mt-2 text-sm text-slate-600">Central overview for platform health, tenant activity, and support workflow.</p>
+      </header>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <article className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900">Analytics</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Open <span className="font-semibold text-slate-900">Analytics</span> to view usage charts, active organizations, and engagement trends.
+          </p>
+        </article>
+        <article className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900">Support</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Open <span className="font-semibold text-slate-900">Support</span> to inspect logs, debug issues, and send support communication.
+          </p>
+        </article>
+        <article className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900">Configuration</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Open <span className="font-semibold text-slate-900">Configuration</span> to add and edit tenant details and org IDs.
+          </p>
+        </article>
+      </div>
+    </section>
+  );
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState<PageKey>("dashboard");
@@ -99,36 +134,49 @@ export default function Dashboard() {
   }
 
   const canViewAdmin = user?.role === "system_admin";
+  const userRole = user?.role || "org_admin";
+  const isSystemAdmin = userRole === "system_admin";
 
   const pageContent = useMemo(() => {
+    if (user?.role === "system_admin") {
+      if (currentPage === "admin") return <SystemAdminHome />;
+      if (currentPage === "analytics") return <DashboardadminPage />;
+      if (currentPage === "settings") return <SystemConfigurationPage />;
+      return <SystemAdminDashboardPage />;
+    }
+
     if (currentPage === "projects") return <ProjectsPage />;
     if (currentPage === "tasks") return <TasksPage />;
     if (currentPage === "analytics") return <AnalyticsPage />;
     if (currentPage === "profile" && user) return <ProfilePage user={user} />;
     if (currentPage === "settings") return <SettingsPage />;
-    if (currentPage === "admin") {
-      if (user?.role === "system_admin") return <SystemAdminHome />;
-      return <DashboardOverview />;
-    }
+    if (currentPage === "admin") return <DashboardOverview />;
     return <DashboardOverview />;
   }, [currentPage, user]);
 
   useEffect(() => {
+    if (user?.role === "system_admin") {
+      if (currentPage !== "dashboard" && currentPage !== "analytics" && currentPage !== "admin" && currentPage !== "settings") {
+        setCurrentPage("dashboard");
+      }
+      return;
+    }
     if (currentPage === "admin" && !canViewAdmin) {
       setCurrentPage("dashboard");
     }
-  }, [canViewAdmin, currentPage]);
+  }, [canViewAdmin, currentPage, user?.role]);
 
   if (!ready) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-100 text-sm text-slate-600">Loading workspace...</div>;
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-100 text-slate-900">
+    <div className={`flex min-h-screen ${isSystemAdmin ? "bg-sky-50 text-slate-900" : "bg-slate-100 text-slate-900"}`}>
       <Sidebar
         currentPage={currentPage}
         onNavigate={setCurrentPage}
-        canViewAdmin={canViewAdmin}
+        role={userRole}
+        isSystemAdmin={isSystemAdmin}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
       />
@@ -137,10 +185,11 @@ export default function Dashboard() {
           currentPage={currentPage}
           onNavigate={setCurrentPage}
           userName={user?.name || "User"}
-          canViewAdmin={canViewAdmin}
+          role={userRole}
+          isSystemAdmin={isSystemAdmin}
           onLogout={handleLogout}
         />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">{pageContent}</main>
+        <main className={`flex-1 overflow-y-auto p-4 md:p-6 ${isSystemAdmin ? "bg-sky-50" : ""}`}>{pageContent}</main>
       </div>
     </div>
   );

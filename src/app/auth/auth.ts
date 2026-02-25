@@ -53,6 +53,9 @@ export type SystemOrganization = {
   user_count: number;
   project_count: number;
   task_count: number;
+  active_users_7d: number;
+  last_login_at?: string | null;
+  active_workspace_7d: boolean;
 };
 
 export type SystemAnalytics = {
@@ -60,6 +63,28 @@ export type SystemAnalytics = {
   user_count: number;
   project_count: number;
   task_count: number;
+  active_users_24h: number;
+  active_users_7d: number;
+  active_tenants_7d: number;
+};
+
+export type SystemLog = {
+  id: number;
+  tenant_slug: string;
+  user_email: string;
+  role: string;
+  method: string;
+  path: string;
+  status_code: number;
+  latency_ms: number;
+  created_at: string;
+};
+
+export type SystemTenant = {
+  id: number;
+  slug: string;
+  name: string;
+  created_at: string;
 };
 
 function parseJwtClaims(token: string): Record<string, unknown> {
@@ -269,6 +294,52 @@ export async function getSystemAnalytics(): Promise<SystemAnalytics> {
   return requestJSON<SystemAnalytics>("/api/v1/system/analytics", {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function getSystemLogs(limit = 100): Promise<SystemLog[]> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: SystemLog[] }>(`/api/v1/system/logs?limit=${limit}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return payload.items || [];
+}
+
+export async function getSystemTenants(): Promise<SystemTenant[]> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: SystemTenant[] }>("/api/v1/system/tenants", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return payload.items || [];
+}
+
+export async function createSystemTenant(input: { slug: string; name: string }): Promise<SystemTenant> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<SystemTenant>("/api/v1/system/tenants", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateSystemTenant(input: { id: number; slug: string; name: string }): Promise<SystemTenant> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<SystemTenant>(`/api/v1/system/tenants/${input.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ slug: input.slug, name: input.name }),
   });
 }
 
