@@ -1,15 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import AdminPage from "../admin/admin";
+import { AuthUser, getSession, logout } from "../auth/auth";
 import { Nav } from "../componets/Nav";
 import AnalyticsPage from "./Analytics";
+import ProfilePage from "./Profile";
 import ProjectsPage from "./Projects";
 import { Sidebar } from "./Sidebar";
 import SettingsPage from "./Settings";
 import TasksPage from "./Task";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "profile" | "settings" | "admin";
 
 const stats = [
   { label: "Active Projects", value: "18", change: "+3 this month" },
@@ -31,9 +34,6 @@ function DashboardOverview() {
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Workspace Summary</p>
         <h1 className="mt-1 text-2xl font-semibold text-slate-900">Program Control Center</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Keep project operations clean and visible before multi-tenant auth wiring.
-        </p>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -79,22 +79,45 @@ function DashboardOverview() {
 }
 
 export default function Dashboard() {
+  const router = useRouter();
   const [currentPage, setCurrentPage] = useState<PageKey>("dashboard");
+  const [ready, setReady] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    const session = getSession();
+    if (!session) {
+      router.replace("/auth");
+      return;
+    }
+    setUser(session.user);
+    setReady(true);
+  }, [router]);
+
+  function handleLogout() {
+    logout();
+    router.replace("/auth");
+  }
 
   const pageContent = useMemo(() => {
     if (currentPage === "projects") return <ProjectsPage />;
     if (currentPage === "tasks") return <TasksPage />;
     if (currentPage === "analytics") return <AnalyticsPage />;
+    if (currentPage === "profile" && user) return <ProfilePage user={user} />;
     if (currentPage === "settings") return <SettingsPage />;
     if (currentPage === "admin") return <AdminPage />;
     return <DashboardOverview />;
-  }, [currentPage]);
+  }, [currentPage, user]);
+
+  if (!ready) {
+    return <div className="flex min-h-screen items-center justify-center bg-slate-100 text-sm text-slate-600">Loading workspace...</div>;
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-100 text-slate-900">
       <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Nav currentPage={currentPage} />
+        <Nav currentPage={currentPage} userName={user?.name || "User"} onLogout={handleLogout} />
         <main className="flex-1 overflow-y-auto p-6">{pageContent}</main>
       </div>
     </div>

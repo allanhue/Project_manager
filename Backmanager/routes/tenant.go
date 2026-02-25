@@ -10,6 +10,7 @@ import (
 
 const tenantCtxKey = "tenant_id"
 const userCtxKey = "user_id"
+const roleCtxKey = "role"
 
 func AuthMiddleware(secret []byte, issuer string) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -53,8 +54,13 @@ func AuthMiddleware(secret []byte, issuer string) gin.HandlerFunc {
 		}
 
 		userID, _ := claims["sub"].(string)
+		role, _ := claims["role"].(string)
+		if role == "" {
+			role = "org_admin"
+		}
 		c.Set(tenantCtxKey, tenantID)
 		c.Set(userCtxKey, userID)
+		c.Set(roleCtxKey, role)
 		c.Next()
 	}
 }
@@ -66,4 +72,23 @@ func tenantFromContext(c *gin.Context) string {
 	}
 	id, _ := v.(string)
 	return id
+}
+
+func roleFromContext(c *gin.Context) string {
+	v, ok := c.Get(roleCtxKey)
+	if !ok {
+		return ""
+	}
+	role, _ := v.(string)
+	return role
+}
+
+func RequireSystemAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if roleFromContext(c) != "system_admin" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "system admin access required"})
+			return
+		}
+		c.Next()
+	}
 }

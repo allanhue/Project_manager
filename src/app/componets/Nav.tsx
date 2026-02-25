@@ -1,19 +1,22 @@
-type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "profile" | "settings" | "admin";
 
 const titles: Record<PageKey, string> = {
   dashboard: "Dashboard",
   projects: "Projects",
   tasks: "Tasks",
   analytics: "Analytics",
+  profile: "Profile",
   settings: "Settings",
   admin: "Admin",
 };
 
 type NavProps = {
   currentPage: PageKey;
+  userName: string;
+  onLogout: () => void;
 };
 
-export function Nav({ currentPage }: NavProps) {
+export function Nav({ currentPage, userName, onLogout }: NavProps) {
   return (
     <header className="border-b border-slate-200 bg-white px-6 py-4">
       <div className="flex items-center justify-between gap-4">
@@ -27,8 +30,15 @@ export function Nav({ currentPage }: NavProps) {
             className="w-72 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-300 focus:bg-white"
           />
           <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700">
-            Allan
+            {userName}
           </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Logout
+          </button>
         </div>
       </div>
     </header>

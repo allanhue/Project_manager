@@ -36,6 +36,7 @@ func (s *Service) Register(c *gin.Context) {
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	req.Name = strings.TrimSpace(req.Name)
 	req.TenantName = strings.TrimSpace(req.TenantName)
+	role := s.roleForEmail(req.Email)
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -64,10 +65,10 @@ func (s *Service) Register(c *gin.Context) {
 
 	var userID int64
 	err = tx.QueryRow(c.Request.Context(), `
-		INSERT INTO users (tenant_id, name, email, password_hash)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO users (tenant_id, name, email, password_hash, role)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
-	`, tenantID, req.Name, req.Email, string(hash)).Scan(&userID)
+	`, tenantID, req.Name, req.Email, string(hash), role).Scan(&userID)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "user already exists for this tenant"})
 		return
@@ -78,7 +79,7 @@ func (s *Service) Register(c *gin.Context) {
 		return
 	}
 
-	token, err := s.issueToken(userID, req.TenantSlug, req.Email)
+	token, err := s.issueToken(userID, req.TenantSlug, req.Email, req.Name, req.TenantName, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 		return
@@ -91,6 +92,8 @@ func (s *Service) Register(c *gin.Context) {
 			"name":        req.Name,
 			"email":       req.Email,
 			"tenant_slug": req.TenantSlug,
+			"tenant_name": req.TenantName,
+			"role":        role,
 		},
 	})
 }
@@ -107,12 +110,15 @@ func (s *Service) Login(c *gin.Context) {
 
 	var userID int64
 	var hash string
+	var role string
+	var name string
+	var tenantName string
 	err := s.DB.QueryRow(c.Request.Context(), `
-		SELECT u.id, u.password_hash
+		SELECT u.id, u.password_hash, u.role, u.name, t.name
 		FROM users u
 		JOIN tenants t ON t.id = u.tenant_id
 		WHERE t.slug = $1 AND u.email = $2
-	`, req.TenantSlug, req.Email).Scan(&userID, &hash)
+	`, req.TenantSlug, req.Email).Scan(&userID, &hash, &role, &name, &tenantName)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
@@ -123,24 +129,37 @@ func (s *Service) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := s.issueToken(userID, req.TenantSlug, req.Email)
+	token, err := s.issueToken(userID, req.TenantSlug, req.Email, name, tenantName, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	c.JSON(http.StatusOK, gin.H{
+		"token": token,
+		"user": gin.H{
+			"id":          userID,
+			"name":        name,
+			"email":       req.Email,
+			"tenant_slug": req.TenantSlug,
+			"tenant_name": tenantName,
+			"role":        role,
+		},
+	})
 }
 
-func (s *Service) issueToken(userID int64, tenantSlug string, email string) (string, error) {
+func (s *Service) issueToken(userID int64, tenantSlug, email, name, tenantName, role string) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"sub":       fmt.Sprintf("%d", userID),
-		"tenant_id": tenantSlug,
-		"email":     email,
-		"iss":       s.JWTIssuer,
-		"iat":       now.Unix(),
-		"exp":       now.Add(s.JWTTTL).Unix(),
+		"sub":         fmt.Sprintf("%d", userID),
+		"tenant_id":   tenantSlug,
+		"tenant_name": tenantName,
+		"email":       email,
+		"name":        name,
+		"role":        role,
+		"iss":         s.JWTIssuer,
+		"iat":         now.Unix(),
+		"exp":         now.Add(s.JWTTTL).Unix(),
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return tok.SignedString(s.JWTSecret)

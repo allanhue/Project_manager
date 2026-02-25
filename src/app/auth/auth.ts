@@ -2,43 +2,105 @@ export type AuthUser = {
   id: string;
   name: string;
   email: string;
-  organization: string;
+  tenantSlug: string;
+  tenantName?: string;
 };
 
-type StoredUser = AuthUser & { password: string };
+export type AuthSession = {
+  token: string;
+  user: AuthUser;
+};
 
-const USERS_KEY = "pulseforge_users";
 const SESSION_KEY = "pulseforge_session";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
 
-function readUsers(): StoredUser[] {
-  if (typeof window === "undefined") return [];
-  const raw = window.localStorage.getItem(USERS_KEY);
-  if (!raw) return [];
+type RegisterInput = {
+  tenantSlug: string;
+  tenantName: string;
+  name: string;
+  email: string;
+  password: string;
+};
+
+type LoginInput = {
+  tenantSlug: string;
+  email: string;
+  password: string;
+};
+
+export type Project = {
+  id: number;
+  tenant_id: string;
+  name: string;
+  status: string;
+  created_at: string;
+};
+
+function parseJwtClaims(token: string): Record<string, unknown> {
   try {
-    return JSON.parse(raw) as StoredUser[];
+    const parts = token.split(".");
+    if (parts.length < 2) return {};
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = atob(payload);
+    return JSON.parse(decoded) as Record<string, unknown>;
   } catch {
-    return [];
+    return {};
   }
 }
 
-function writeUsers(users: StoredUser[]) {
-  window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-function toPublicUser(user: StoredUser): AuthUser {
-  const { password: _password, ...publicUser } = user;
-  return publicUser;
-}
-
-export function getCurrentUser(): AuthUser | null {
+function readSession(): AuthSession | null {
   if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(SESSION_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as AuthUser;
+    return JSON.parse(raw) as AuthSession;
   } catch {
     return null;
   }
+}
+
+function writeSession(session: AuthSession) {
+  window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+function normalizeError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return "Request failed.";
+}
+
+async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, init);
+  const payload = (await response.json().catch(() => ({}))) as { error?: string } & T;
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed with ${response.status}`);
+  }
+  return payload;
+}
+
+function userFromToken(token: string): AuthUser {
+  const claims = parseJwtClaims(token);
+  const email = String(claims.email || "");
+  const tenantSlug = String(claims.tenant_id || "");
+  const id = String(claims.sub || "");
+  const nameFromEmail = email.includes("@") ? email.split("@")[0] : "User";
+  return {
+    id,
+    email,
+    tenantSlug,
+    name: nameFromEmail,
+  };
+}
+
+export function getSession(): AuthSession | null {
+  return readSession();
+}
+
+export function getCurrentUser(): AuthUser | null {
+  return readSession()?.user || null;
+}
+
+export function getAuthToken(): string | null {
+  return readSession()?.token || null;
 }
 
 export function logout() {
@@ -46,48 +108,76 @@ export function logout() {
   window.localStorage.removeItem(SESSION_KEY);
 }
 
-export function registerUser(input: {
-  name: string;
-  email: string;
-  organization: string;
-  password: string;
-}): { ok: true; user: AuthUser } | { ok: false; message: string } {
-  const users = readUsers();
-  const email = input.email.trim().toLowerCase();
+export async function registerUser(input: RegisterInput): Promise<{ ok: true; user: AuthUser } | { ok: false; message: string }> {
+  try {
+    const payload = await requestJSON<{
+      token: string;
+      user: { id: number; name: string; email: string; tenant_slug: string };
+    }>("/api/v1/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenant_slug: input.tenantSlug,
+        tenant_name: input.tenantName,
+        name: input.name,
+        email: input.email,
+        password: input.password,
+      }),
+    });
 
-  if (users.some((user) => user.email.toLowerCase() === email)) {
-    return { ok: false, message: "This email is already registered." };
+    const user: AuthUser = {
+      id: String(payload.user.id),
+      name: payload.user.name,
+      email: payload.user.email,
+      tenantSlug: payload.user.tenant_slug,
+      tenantName: input.tenantName,
+    };
+    writeSession({ token: payload.token, user });
+    return { ok: true, user };
+  } catch (error) {
+    return { ok: false, message: normalizeError(error) };
   }
-
-  const user: StoredUser = {
-    id: crypto.randomUUID(),
-    name: input.name.trim(),
-    email,
-    organization: input.organization.trim(),
-    password: input.password,
-  };
-
-  users.push(user);
-  writeUsers(users);
-
-  const sessionUser = toPublicUser(user);
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
-  return { ok: true, user: sessionUser };
 }
 
-export function loginUser(input: {
-  email: string;
-  password: string;
-}): { ok: true; user: AuthUser } | { ok: false; message: string } {
-  const users = readUsers();
-  const email = input.email.trim().toLowerCase();
-  const user = users.find((record) => record.email.toLowerCase() === email);
+export async function loginUser(input: LoginInput): Promise<{ ok: true; user: AuthUser } | { ok: false; message: string }> {
+  try {
+    const payload = await requestJSON<{ token: string }>("/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenant_slug: input.tenantSlug,
+        email: input.email,
+        password: input.password,
+      }),
+    });
 
-  if (!user || user.password !== input.password) {
-    return { ok: false, message: "Invalid email or password." };
+    const user = userFromToken(payload.token);
+    writeSession({ token: payload.token, user });
+    return { ok: true, user };
+  } catch (error) {
+    return { ok: false, message: normalizeError(error) };
   }
+}
 
-  const sessionUser = toPublicUser(user);
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
-  return { ok: true, user: sessionUser };
+export async function listProjects(): Promise<Project[]> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: Project[] }>("/api/v1/projects", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return payload.items || [];
+}
+
+export async function createProject(input: { name: string; status?: string }): Promise<Project> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<Project>("/api/v1/projects", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
 }

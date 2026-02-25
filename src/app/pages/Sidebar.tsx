@@ -1,10 +1,11 @@
-type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "profile" | "settings" | "admin";
 
 const menu: Array<{ key: PageKey; label: string; hint: string }> = [
   { key: "dashboard", label: "Dashboard", hint: "Overview" },
   { key: "projects", label: "Projects", hint: "Portfolios" },
   { key: "tasks", label: "Tasks", hint: "Execution board" },
   { key: "analytics", label: "Analytics", hint: "Reports" },
+  { key: "profile", label: "Profile", hint: "Identity" },
   { key: "settings", label: "Settings", hint: "Workspace config" },
   { key: "admin", label: "Admin", hint: "Tenant controls" },
 ];
