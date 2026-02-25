@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -179,4 +180,16 @@ func (s *Service) issueToken(userID int64, tenantSlug, email, name, tenantName, 
 
 func normalizeSlug(v string) string {
 	return strings.ToLower(strings.TrimSpace(v))
+}
+
+func (s *Service) EnsureSystemAdminRoles(ctx context.Context) error {
+	if len(s.SystemAdminEmails) == 0 {
+		return nil
+	}
+	for email := range s.SystemAdminEmails {
+		if _, err := s.DB.Exec(ctx, `UPDATE users SET role = 'system_admin' WHERE lower(email) = lower($1)`, email); err != nil {
+			return err
+		}
+	}
+	return nil
 }
