@@ -60,6 +60,7 @@ func main() {
 	{
 		auth.POST("/register", svc.Register)
 		auth.POST("/login", svc.Login)
+		auth.POST("/forgot-password", svc.ForgotPassword)
 	}
 
 	api := r.Group("/api/v1")

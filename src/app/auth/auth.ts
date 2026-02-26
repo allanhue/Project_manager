@@ -29,6 +29,11 @@ type LoginInput = {
   password: string;
 };
 
+type ForgotPasswordInput = {
+  tenantSlug: string;
+  email: string;
+};
+
 export type Project = {
   id: number;
   tenant_id: string;
@@ -227,6 +232,22 @@ export async function loginUser(input: LoginInput): Promise<{ ok: true; user: Au
     if (payload.user?.role) user.role = payload.user.role;
     writeSession({ token: payload.token, user });
     return { ok: true, user };
+  } catch (error) {
+    return { ok: false, message: normalizeError(error) };
+  }
+}
+
+export async function forgotPassword(input: ForgotPasswordInput): Promise<{ ok: true; message: string } | { ok: false; message: string }> {
+  try {
+    const payload = await requestJSON<{ status?: string; message?: string }>("/api/v1/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenant_slug: input.tenantSlug,
+        email: input.email,
+      }),
+    });
+    return { ok: true, message: payload.status || "If the account exists, a reset email has been sent." };
   } catch (error) {
     return { ok: false, message: normalizeError(error) };
   }

@@ -2,6 +2,7 @@ package routes
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"net/http"
 	"strings"
@@ -24,6 +25,11 @@ type loginRequest struct {
 	TenantSlug string `json:"tenant_slug" binding:"required"`
 	Email      string `json:"email" binding:"required,email"`
 	Password   string `json:"password" binding:"required"`
+}
+
+type forgotPasswordRequest struct {
+	TenantSlug string `json:"tenant_slug" binding:"required"`
+	Email      string `json:"email" binding:"required,email"`
 }
 
 func (s *Service) Register(c *gin.Context) {
@@ -160,6 +166,88 @@ func (s *Service) Login(c *gin.Context) {
 			"role":        role,
 		},
 	})
+}
+
+func (s *Service) ForgotPassword(c *gin.Context) {
+	var req forgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	req.TenantSlug = normalizeSlug(req.TenantSlug)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+
+	tx, err := s.DB.Begin(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "transaction failed"})
+		return
+	}
+	defer tx.Rollback(c.Request.Context())
+
+	var userID int64
+	var name string
+	var tenantName string
+	err = tx.QueryRow(c.Request.Context(), `
+		SELECT u.id, u.name, t.name
+		FROM users u
+		JOIN tenants t ON t.id = u.tenant_id
+		WHERE t.slug = $1 AND lower(u.email) = lower($2)
+	`, req.TenantSlug, req.Email).Scan(&userID, &name, &tenantName)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"status": "if the account exists, a reset email has been sent"})
+		return
+	}
+
+	tempPassword, err := generateTemporaryPassword(12)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "password generation failed"})
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(tempPassword), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "password hashing failed"})
+		return
+	}
+	if _, err := tx.Exec(c.Request.Context(), `UPDATE users SET password_hash = $1 WHERE id = $2`, string(hash), userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "password update failed"})
+		return
+	}
+
+	subject := "PulseForge password reset"
+	message := fmt.Sprintf(
+		"Hi %s,\n\nYour temporary password for %s is:\n%s\n\nPlease login and change it immediately.",
+		name,
+		tenantName,
+		tempPassword,
+	)
+	if err := s.sendMail(context.Background(), req.Email, subject, message); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := tx.Commit(c.Request.Context()); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "commit failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "if the account exists, a reset email has been sent"})
+}
+
+func generateTemporaryPassword(length int) (string, error) {
+	if length < 8 {
+		length = 8
+	}
+	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$%*"
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	out := make([]byte, length)
+	for i, b := range bytes {
+		out[i] = alphabet[int(b)%len(alphabet)]
+	}
+	return string(out), nil
 }
 
 func (s *Service) issueToken(userID int64, tenantSlug, email, name, tenantName, role string) (string, error) {

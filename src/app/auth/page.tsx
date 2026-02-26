@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { loginUser, registerUser } from "./auth";
+import { forgotPassword, loginUser, registerUser } from "./auth";
 
 type Mode = "login" | "register";
 
@@ -15,6 +15,8 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState("");
   const [error, setError] = useState("");
 
   const title = useMemo(() => (mode === "login" ? "Login" : "Create Account"), [mode]);
@@ -35,6 +37,24 @@ export default function AuthPage() {
       return;
     }
     router.push("/");
+  }
+
+  async function onForgotPassword() {
+    setError("");
+    setForgotMessage("");
+    if (!tenantSlug.trim() || !email.trim()) {
+      setError("Enter tenant slug and email first.");
+      return;
+    }
+
+    setForgotLoading(true);
+    const result = await forgotPassword({ tenantSlug, email });
+    setForgotLoading(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    setForgotMessage(result.message);
   }
 
   return (
@@ -109,7 +129,19 @@ export default function AuthPage() {
           className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
         />
 
+        {mode === "login" ? (
+          <button
+            type="button"
+            onClick={onForgotPassword}
+            disabled={forgotLoading}
+            className="mt-2 text-sm font-medium text-sky-700 hover:text-sky-800 disabled:opacity-60"
+          >
+            {forgotLoading ? "Sending reset..." : "Forgot password?"}
+          </button>
+        ) : null}
+
         {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
+        {forgotMessage ? <p className="mt-3 text-sm text-emerald-700">{forgotMessage}</p> : null}
 
         <button
           type="submit"
