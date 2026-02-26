@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin" 
 )
 
 type Task struct {
@@ -47,8 +47,9 @@ func (s *Service) ListTasks(c *gin.Context) {
 		SELECT id, tenant_id, project_id, title, status, priority, created_at
 		FROM tasks
 		WHERE tenant_id = $1
-		ORDER BY id DESC
+		ORDER BY id DESC  
 	`, tenantID)
+	// In a real app, you'd want pagination here instead of returning all tasks at once.
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "query failed"})
 		return
