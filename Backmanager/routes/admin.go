@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type organizationSummary struct {
@@ -32,10 +33,12 @@ type systemTenant struct {
 }
 
 type tenantUpsertRequest struct {
-	Slug     string `json:"slug" binding:"required"`
-	Name     string `json:"name" binding:"required"`
-	LogoData string `json:"logo_data"`
-	LogoURL  string `json:"logo_url"`
+	Slug             string `json:"slug" binding:"required"`
+	Name             string `json:"name" binding:"required"`
+	LogoData         string `json:"logo_data"`
+	LogoURL          string `json:"logo_url"`
+	OrgAdminEmail    string `json:"org_admin_email"`
+	OrgAdminPassword string `json:"org_admin_password"`
 }
 
 func (s *Service) SystemOrganizations(c *gin.Context) {
@@ -125,6 +128,8 @@ func (s *Service) CreateTenant(c *gin.Context) {
 	req.Name = strings.TrimSpace(req.Name)
 	req.LogoData = strings.TrimSpace(req.LogoData)
 	req.LogoURL = strings.TrimSpace(req.LogoURL)
+	req.OrgAdminEmail = strings.ToLower(strings.TrimSpace(req.OrgAdminEmail))
+	req.OrgAdminPassword = strings.TrimSpace(req.OrgAdminPassword)
 	logoValue := req.LogoData
 	if logoValue == "" {
 		logoValue = req.LogoURL
@@ -155,8 +160,15 @@ func (s *Service) CreateTenant(c *gin.Context) {
 		return
 	}
 
+	tx, err := s.DB.Begin(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "transaction failed"})
+		return
+	}
+	defer tx.Rollback(c.Request.Context())
+
 	var item systemTenant
-	err := s.DB.QueryRow(c.Request.Context(), `
+	err = tx.QueryRow(c.Request.Context(), `
 		INSERT INTO tenants (slug, name, logo_url)
 		VALUES ($1, $2, $3)
 		RETURNING id, slug, name, COALESCE(logo_url, ''), created_at
@@ -166,7 +178,59 @@ func (s *Service) CreateTenant(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, item)
+	createdOrgAdmin := false
+	if req.OrgAdminEmail != "" || req.OrgAdminPassword != "" {
+		if req.OrgAdminEmail == "" || req.OrgAdminPassword == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "org admin email and password are both required"})
+			return
+		}
+		if len(req.OrgAdminPassword) < 6 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "org admin password must be at least 6 characters"})
+			return
+		}
+		var existingUserID int64
+		if err := tx.QueryRow(c.Request.Context(), `
+			SELECT id FROM users WHERE lower(email) = lower($1) LIMIT 1
+		`, req.OrgAdminEmail).Scan(&existingUserID); err == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "org admin email already exists"})
+			return
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "org admin lookup failed"})
+			return
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.OrgAdminPassword), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "org admin password hash failed"})
+			return
+		}
+		publicID, err := s.generateUserPublicID(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "org admin user id generation failed"})
+			return
+		}
+		if _, err := tx.Exec(c.Request.Context(), `
+			INSERT INTO users (tenant_id, name, email, password_hash, role, public_id)
+			VALUES ($1, $2, $3, $4, 'org_admin', $5)
+		`, item.ID, req.Name+" Admin", req.OrgAdminEmail, string(hash), publicID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "org admin creation failed"})
+			return
+		}
+		createdOrgAdmin = true
+	}
+
+	if err := tx.Commit(c.Request.Context()); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "commit failed"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"id":                item.ID,
+		"slug":              item.Slug,
+		"name":              item.Name,
+		"logo_url":          item.LogoURL,
+		"created_at":        item.CreatedAt,
+		"org_admin_created": createdOrgAdmin,
+	})
 }
 
 func (s *Service) UpdateTenant(c *gin.Context) {

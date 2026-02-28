@@ -3,6 +3,16 @@
 import { FormEvent, useEffect, useState } from "react";
 import { createSystemTenant, getSystemTenants, SystemTenant, updateSystemTenant } from "../auth/auth";
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export default function SystemConfigurationPage() {
   const [items, setItems] = useState<SystemTenant[]>([]);
   const [error, setError] = useState("");
@@ -12,6 +22,8 @@ export default function SystemConfigurationPage() {
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
   const [logoData, setLogoData] = useState("");
+  const [orgAdminEmail, setOrgAdminEmail] = useState("");
+  const [orgAdminPassword, setOrgAdminPassword] = useState("");
 
   async function loadTenants() {
     setError("");
@@ -31,11 +43,20 @@ export default function SystemConfigurationPage() {
     event.preventDefault();
     setStatus("Saving...");
     try {
-      const created = await createSystemTenant({ slug: slug.trim().toLowerCase(), name: name.trim(), logo_data: logoData.trim() });
+      const computedSlug = slugify(name);
+      const created = await createSystemTenant({
+        slug: computedSlug,
+        name: name.trim(),
+        logo_data: logoData.trim(),
+        org_admin_email: orgAdminEmail.trim().toLowerCase(),
+        org_admin_password: orgAdminPassword,
+      });
       setItems((prev) => [created, ...prev]);
       setSlug("");
       setName("");
       setLogoData("");
+      setOrgAdminEmail("");
+      setOrgAdminPassword("");
       setShowCreate(false);
       setStatus("Tenant created.");
     } catch (err) {
@@ -59,6 +80,8 @@ export default function SystemConfigurationPage() {
       setSlug("");
       setName("");
       setLogoData("");
+      setOrgAdminEmail("");
+      setOrgAdminPassword("");
       setStatus("Tenant updated.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to update tenant.");
@@ -117,6 +140,8 @@ export default function SystemConfigurationPage() {
                 setSlug("");
                 setName("");
                 setLogoData("");
+                setOrgAdminEmail("");
+                setOrgAdminPassword("");
                 setShowCreate(true);
               }}
               className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
@@ -156,6 +181,8 @@ export default function SystemConfigurationPage() {
                         setSlug(item.slug);
                         setName(item.name);
                         setLogoData(item.logo_url || "");
+                        setOrgAdminEmail("");
+                        setOrgAdminPassword("");
                       }}
                       className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
                     >
@@ -177,17 +204,6 @@ export default function SystemConfigurationPage() {
 
             <div className="mt-4 grid gap-3">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Org ID (Slug)</label>
-                <input
-                  type="text"
-                  value={slug}
-                  onChange={(event) => setSlug(event.target.value)}
-                  placeholder="acme"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
-                  required
-                />
-              </div>
-              <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Organization Name</label>
                 <input
                   type="text"
@@ -198,6 +214,39 @@ export default function SystemConfigurationPage() {
                   required
                 />
               </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Org ID (Auto Slug)</label>
+                <input
+                  type="text"
+                  value={editing ? slug : slugify(name)}
+                  readOnly
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+                />
+              </div>
+              {!editing ? (
+                <>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Org Admin Email</label>
+                    <input
+                      type="email"
+                      value={orgAdminEmail}
+                      onChange={(event) => setOrgAdminEmail(event.target.value)}
+                      placeholder="admin@tenant.com"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Org Admin Password</label>
+                    <input
+                      type="password"
+                      value={orgAdminPassword}
+                      onChange={(event) => setOrgAdminPassword(event.target.value)}
+                      placeholder="temporary password"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                    />
+                  </div>
+                </>
+              ) : null}
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Logo Upload</label>
                 <input
@@ -229,6 +278,8 @@ export default function SystemConfigurationPage() {
                   setShowCreate(false);
                   setEditing(null);
                   setLogoData("");
+                  setOrgAdminEmail("");
+                  setOrgAdminPassword("");
                 }}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
               >

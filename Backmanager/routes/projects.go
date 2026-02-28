@@ -107,6 +107,17 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 
 		CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs (created_at DESC);
 		CREATE INDEX IF NOT EXISTS idx_system_logs_tenant_slug ON system_logs (tenant_slug);
+
+		CREATE TABLE IF NOT EXISTS system_updates (
+			id BIGSERIAL PRIMARY KEY,
+			scheduled_date DATE NOT NULL,
+			title TEXT NOT NULL,
+			feature_brief TEXT NOT NULL,
+			expectations TEXT NOT NULL,
+			created_by_email TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_system_updates_scheduled_date ON system_updates (scheduled_date);
 	`)
 	return err
 }

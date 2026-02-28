@@ -137,54 +137,77 @@ export default function ProjectsPage() {
       </div>
 
       {showCreate ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-4">
-          <form onSubmit={onCreate} className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
-            <h3 className="text-base font-semibold text-slate-900">Create Project</h3>
-            <p className="mt-1 text-sm text-slate-600">Capture client work, billing stage and delivery status quickly.</p>
-            <div className="mt-4 grid gap-3">
-              <input
-                type="text"
-                value={newName}
-                onChange={(event) => setNewName(event.target.value)}
-                placeholder="Project name"
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
-              />
-              <select
-                value={newStatus}
-                onChange={(event) => setNewStatus(event.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
-              >
-                <option value="active">active</option>
-                <option value="done">done</option>
-                <option value="blocked">blocked</option>
-              </select>
-              <input
-                type="date"
-                value={newStartDate}
-                onChange={(event) => setNewStartDate(event.target.value)}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
-                required
-              />
-              <input
-                type="number"
-                min={1}
-                value={newDurationDays}
-                onChange={(event) => setNewDurationDays(Number(event.target.value))}
-                placeholder="Duration in days"
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
-                required
-              />
-              <input
-                type="number"
-                min={1}
-                value={newTeamSize}
-                onChange={(event) => setNewTeamSize(Number(event.target.value))}
-                placeholder="People assigned"
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
-                required
-              />
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
+          <form onSubmit={onCreate} className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
+              <h3 className="text-lg font-semibold text-slate-900">Create Project</h3>
+              <p className="mt-1 text-sm text-slate-600">Define timeline, ownership, and staffing in one place.</p>
             </div>
-            <div className="mt-4 flex justify-end gap-2">
+
+            <div className="grid gap-4 p-6 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-slate-700">Project Name</label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(event) => setNewName(event.target.value)}
+                  placeholder="Website redesign Q2"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Execution Status</label>
+                <select
+                  value={newStatus}
+                  onChange={(event) => setNewStatus(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+                >
+                  <option value="active">active</option>
+                  <option value="done">done</option>
+                  <option value="blocked">blocked</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Start Date</label>
+                <input
+                  type="date"
+                  value={newStartDate}
+                  onChange={(event) => setNewStartDate(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Duration (Days)</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={newDurationDays}
+                  onChange={(event) => setNewDurationDays(Number(event.target.value))}
+                  placeholder="30"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Assigned People</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={newTeamSize}
+                  onChange={(event) => setNewTeamSize(Number(event.target.value))}
+                  placeholder="3"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4">
               <button
                 type="button"
                 onClick={() => setShowCreate(false)}
@@ -193,7 +216,7 @@ export default function ProjectsPage() {
                 Cancel
               </button>
               <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-                Create
+                Create Project
               </button>
             </div>
           </form>

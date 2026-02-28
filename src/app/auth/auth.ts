@@ -102,6 +102,16 @@ export type SystemTenant = {
   created_at: string;
 };
 
+export type SystemUpdate = {
+  id: number;
+  scheduled_date: string;
+  title: string;
+  feature_brief: string;
+  expectations: string;
+  created_by_email: string;
+  created_at: string;
+};
+
 function parseJwtClaims(token: string): Record<string, unknown> {
   try {
     const parts = token.split(".");
@@ -365,7 +375,65 @@ export async function getSystemTenants(): Promise<SystemTenant[]> {
   return payload.items || [];
 }
 
-export async function createSystemTenant(input: { slug: string; name: string; logo_data?: string }): Promise<SystemTenant> {
+export async function getSystemUpdates(): Promise<SystemUpdate[]> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: SystemUpdate[] }>("/api/v1/system/updates", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return payload.items || [];
+}
+
+export async function createSystemUpdate(input: {
+  scheduled_date: string;
+  title: string;
+  feature_brief: string;
+  expectations: string;
+}): Promise<{ item: SystemUpdate; recipients: number; sent: number; failed: number; mail_status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ item: SystemUpdate; recipients: number; sent: number; failed: number; mail_status: string }>("/api/v1/system/updates", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateSystemUpdate(input: {
+  id: number;
+  scheduled_date: string;
+  title: string;
+  feature_brief: string;
+  expectations: string;
+}): Promise<{ item: SystemUpdate; recipients: number; sent: number; failed: number; mail_status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ item: SystemUpdate; recipients: number; sent: number; failed: number; mail_status: string }>(`/api/v1/system/updates/${input.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      scheduled_date: input.scheduled_date,
+      title: input.title,
+      feature_brief: input.feature_brief,
+      expectations: input.expectations,
+    }),
+  });
+}
+
+export async function createSystemTenant(input: {
+  slug: string;
+  name: string;
+  logo_data?: string;
+  org_admin_email?: string;
+  org_admin_password?: string;
+}): Promise<SystemTenant> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
   return requestJSON<SystemTenant>("/api/v1/system/tenants", {
@@ -374,7 +442,12 @@ export async function createSystemTenant(input: { slug: string; name: string; lo
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ ...input, logo_data: input.logo_data || "" }),
+    body: JSON.stringify({
+      ...input,
+      logo_data: input.logo_data || "",
+      org_admin_email: input.org_admin_email || "",
+      org_admin_password: input.org_admin_password || "",
+    }),
   });
 }
 

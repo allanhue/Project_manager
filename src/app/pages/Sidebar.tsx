@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "calendar" | "profile" | "settings" | "admin";
 
 const menu: Array<{ key: PageKey; label: string; hint: string; icon: ReactNode }> = [
   {
@@ -43,6 +43,17 @@ const menu: Array<{ key: PageKey; label: string; hint: string; icon: ReactNode }
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M4 20h16" />
         <path d="M7 16v-5M12 16V8M17 16v-3" />
+      </svg>
+    ),
+  },
+  {
+    key: "calendar",
+    label: "Calendar",
+    hint: "Monthly planner",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M4 7h16v13H4z" />
+        <path d="M8 3v4M16 3v4M4 11h16" />
       </svg>
     ),
   },
@@ -93,7 +104,7 @@ type SidebarProps = {
 export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapsed, onToggleCollapse }: SidebarProps) {
   const visibleMenu =
     role === "system_admin"
-      ? menu.filter((item) => item.key === "dashboard" || item.key === "analytics" || item.key === "admin" || item.key === "settings")
+      ? menu.filter((item) => item.key === "dashboard" || item.key === "analytics" || item.key === "calendar" || item.key === "admin" || item.key === "settings")
       : menu.filter((item) => item.key !== "admin");
 
   function displayLabel(key: PageKey, fallback: string) {
@@ -109,6 +120,7 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
     if (role !== "system_admin") return fallback;
     if (key === "dashboard") return "System overview";
     if (key === "analytics") return "Detailed reports";
+    if (key === "calendar") return "Deadlines view";
     if (key === "admin") return "Technical issues";
     if (key === "settings") return "Tenant setup";
     return fallback;
@@ -153,8 +165,8 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
                         ? "bg-sky-100 text-sky-900 ring-1 ring-sky-300"
                         : "bg-sky-50 text-sky-700 ring-1 ring-sky-200"
                       : isSystemAdmin
-                        ? "text-slate-700 hover:bg-sky-50 hover:text-slate-900"
-                        : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                        ? "text-slate-700 hover:-translate-y-[1px] hover:bg-sky-50 hover:text-slate-900"
+                        : "text-slate-700 hover:-translate-y-[1px] hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
                   {collapsed ? (

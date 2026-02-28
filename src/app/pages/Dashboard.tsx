@@ -8,13 +8,14 @@ import SystemAdminHome from "../admin/Home";
 import { AuthUser, getSession, logout } from "../auth/auth";
 import { Nav } from "../componets/Nav";
 import AnalyticsPage from "./Analytics";
+import CalendarPage from "./Calendar";
 import ProfilePage from "./Profile";
 import ProjectsPage from "./Projects";
 import { Sidebar } from "./Sidebar";
 import SettingsPage from "./Settings";
 import TasksPage from "./Task";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "calendar" | "profile" | "settings" | "admin";
 
 const stats = [
   { label: "Receivables", value: "KES 1.42M", change: "+9% vs last month" },
@@ -141,6 +142,7 @@ export default function Dashboard() {
     if (user?.role === "system_admin") {
       if (currentPage === "admin") return <SystemAdminHome />;
       if (currentPage === "analytics") return <DashboardadminPage />;
+      if (currentPage === "calendar") return <CalendarPage />;
       if (currentPage === "settings") return <SystemConfigurationPage />;
       return <SystemAdminDashboardPage />;
     }
@@ -148,6 +150,7 @@ export default function Dashboard() {
     if (currentPage === "projects") return <ProjectsPage />;
     if (currentPage === "tasks") return <TasksPage />;
     if (currentPage === "analytics") return <AnalyticsPage />;
+    if (currentPage === "calendar") return <CalendarPage />;
     if (currentPage === "profile" && user) return <ProfilePage user={user} />;
     if (currentPage === "settings") return <SettingsPage />;
     if (currentPage === "admin") return <DashboardOverview />;
@@ -156,7 +159,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user?.role === "system_admin") {
-      if (currentPage !== "dashboard" && currentPage !== "analytics" && currentPage !== "admin" && currentPage !== "settings") {
+      if (currentPage !== "dashboard" && currentPage !== "analytics" && currentPage !== "calendar" && currentPage !== "admin" && currentPage !== "settings") {
         setCurrentPage("dashboard");
       }
       return;

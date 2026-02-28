@@ -2,6 +2,7 @@ package routes
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -67,10 +68,14 @@ func (s *Service) ListTasks(c *gin.Context) {
 	tasks := make([]Task, 0)
 	for rows.Next() {
 		var item Task
+		var projectID sql.NullInt64
 		var subtasksRaw []byte
-		if err := rows.Scan(&item.ID, &item.TenantID, &item.ProjectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt, &item.ProjectName); err != nil {
+		if err := rows.Scan(&item.ID, &item.TenantID, &projectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt, &item.ProjectName); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
 			return
+		}
+		if projectID.Valid {
+			item.ProjectID = projectID.Int64
 		}
 		item.Subtasks = make([]string, 0)
 		if len(subtasksRaw) > 0 {

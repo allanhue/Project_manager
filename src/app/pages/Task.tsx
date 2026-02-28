@@ -4,10 +4,10 @@ import { FormEvent, useEffect, useState } from "react";
 import { createTask, listProjects, listTasks, Project, TaskItem } from "../auth/auth";
 
 function chipClass(status: string) {
-  if (status === "Done") return "bg-emerald-50 text-emerald-700";
-  if (status === "In progress") return "bg-sky-50 text-sky-700";
+  if (status === "done") return "bg-emerald-50 text-emerald-700";
+  if (status === "in_progress") return "bg-sky-50 text-sky-700";
   return "bg-slate-100 text-slate-700";
-} 
+}
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -114,58 +114,81 @@ export default function TasksPage() {
       </div>
 
       {showCreate ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-4">
-          <form onSubmit={onCreate} className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
-            <h3 className="text-base font-semibold text-slate-900">Create Task</h3>
-            <p className="mt-1 text-sm text-slate-600">Capture work items and keep every team action visible.</p>
-            <div className="mt-4 grid gap-3">
-              <select
-                value={projectId}
-                onChange={(event) => setProjectId(event.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
-                required
-              >
-                <option value="">Select project</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="Task title"
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
-              />
-              <select
-                value={status}
-                onChange={(event) => setStatus(event.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
-              >
-                <option value="todo">To do</option>
-                <option value="in_progress">In progress</option>
-                <option value="done">Done</option>
-              </select>
-              <select
-                value={priority}
-                onChange={(event) => setPriority(event.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
-              >
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
-              </select>
-              <textarea
-                rows={4}
-                value={subtasksText}
-                onChange={(event) => setSubtasksText(event.target.value)}
-                placeholder="Subtasks (one per line)"
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
-              />
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
+          <form onSubmit={onCreate} className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
+              <h3 className="text-lg font-semibold text-slate-900">Create Task</h3>
+              <p className="mt-1 text-sm text-slate-600">Attach work to a project and break execution into subtasks.</p>
             </div>
-            <div className="mt-4 flex justify-end gap-2">
+
+            <div className="grid gap-4 p-6 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Project</label>
+                <select
+                  value={projectId}
+                  onChange={(event) => setProjectId(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+                  required
+                >
+                  <option value="">Select project</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
+                <select
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+                >
+                  <option value="todo">todo</option>
+                  <option value="in_progress">in_progress</option>
+                  <option value="done">done</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-slate-700">Task Title</label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder="Prepare handoff checklist"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Priority</label>
+                <select
+                  value={priority}
+                  onChange={(event) => setPriority(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+                >
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-slate-700">Subtasks (one per line)</label>
+                <textarea
+                  rows={6}
+                  value={subtasksText}
+                  onChange={(event) => setSubtasksText(event.target.value)}
+                  placeholder={"Create API endpoint\nAdd tests\nReview QA checklist"}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4">
               <button
                 type="button"
                 onClick={() => setShowCreate(false)}
@@ -183,3 +206,4 @@ export default function TasksPage() {
     </section>
   );
 }
+
