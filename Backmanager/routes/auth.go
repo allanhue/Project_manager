@@ -65,10 +65,6 @@ func (s *Service) Register(c *gin.Context) {
 			return
 		}
 	}
-	if _, isSystemAdminEmail := s.SystemAdminEmails[req.Email]; isSystemAdminEmail {
-		c.JSON(http.StatusForbidden, gin.H{"error": "system admin accounts cannot be created from signup; use login"})
-		return
-	}
 	role := "org_admin"
 
 	var existingTenantSlug string
@@ -168,7 +164,7 @@ func (s *Service) Register(c *gin.Context) {
 func (s *Service) Login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload", "detail": err.Error()})
 		return
 	}
 
@@ -235,7 +231,7 @@ func (s *Service) Login(c *gin.Context) {
 func (s *Service) ForgotPassword(c *gin.Context) {
 	var req forgotPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload", "detail": err.Error()})
 		return
 	}
 
