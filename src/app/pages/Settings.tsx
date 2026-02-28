@@ -1,28 +1,55 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { sendSupportRequest } from "../auth/auth";
+import { FormEvent, useEffect, useState } from "react";
+import { getSession, sendSupportRequest } from "../auth/auth";
 
-const groups = [
-  {
-    title: "Workspace Preferences",
-    items: ["Default timezone: East Africa Time", "Week starts on Monday", "Project numbering prefix: PF"],
-  },
-  {
-    title: "Notifications",
-    items: ["Daily digest: Enabled", "Task overdue alerts: Enabled", "Email summaries: Disabled"],
-  },
-  {
-    title: "Visibility",
-    items: ["Private projects require invitation", "Activity logs retained for 180 days", "Admins can export reports"],
-  },
-];
+type WorkspaceSettings = {
+  timezone: string;
+  weekStartsOn: "monday" | "sunday";
+  projectPrefix: string;
+  dailyDigest: boolean;
+  overdueAlerts: boolean;
+  emailSummaries: boolean;
+  privateProjects: boolean;
+  logRetentionDays: number;
+  adminsCanExport: boolean;
+};
+
+const defaultSettings: WorkspaceSettings = {
+  timezone: "East Africa Time",
+  weekStartsOn: "monday",
+  projectPrefix: "PF",
+  dailyDigest: true,
+  overdueAlerts: true,
+  emailSummaries: false,
+  privateProjects: true,
+  logRetentionDays: 180,
+  adminsCanExport: true,
+};
 
 export default function SettingsPage() {
+  const [settings, setSettings] = useState<WorkspaceSettings>(defaultSettings);
+  const [settingsStatus, setSettingsStatus] = useState("");
   const [subject, setSubject] = useState("");
   const [priority, setPriority] = useState("normal");
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    const tenantSlug = getSession()?.user.tenantSlug || "default";
+    const raw = window.localStorage.getItem(`workspace_settings_${tenantSlug}`);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as WorkspaceSettings;
+      setSettings({ ...defaultSettings, ...parsed });
+    } catch {}
+  }, []);
+
+  function saveSettings() {
+    const tenantSlug = getSession()?.user.tenantSlug || "default";
+    window.localStorage.setItem(`workspace_settings_${tenantSlug}`, JSON.stringify(settings));
+    setSettingsStatus("Settings saved.");
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,18 +73,99 @@ export default function SettingsPage() {
       </header>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        {groups.map((group) => (
-          <article key={group.title} className="rounded-xl border border-slate-200 bg-white p-4">
-            <h3 className="mb-3 text-sm font-semibold text-slate-900">{group.title}</h3>
-            <ul className="space-y-2 text-sm text-slate-700">
-              {group.items.map((item) => (
-                <li key={item} className="rounded-lg bg-slate-50 px-3 py-2">
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </article>
-        ))}
+        <article className="rounded-xl border border-slate-200 bg-white p-4">
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Workspace Preferences</h3>
+          <div className="space-y-3 text-sm">
+            <div>
+              <label className="mb-1 block text-slate-700">Default timezone</label>
+              <input
+                value={settings.timezone}
+                onChange={(e) => setSettings((prev) => ({ ...prev, timezone: e.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-sky-300"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-slate-700">Week starts on</label>
+              <select
+                value={settings.weekStartsOn}
+                onChange={(e) => setSettings((prev) => ({ ...prev, weekStartsOn: e.target.value as "monday" | "sunday" }))}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-sky-300"
+              >
+                <option value="monday">Monday</option>
+                <option value="sunday">Sunday</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-slate-700">Project numbering prefix</label>
+              <input
+                value={settings.projectPrefix}
+                onChange={(e) => setSettings((prev) => ({ ...prev, projectPrefix: e.target.value.toUpperCase() }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-sky-300"
+              />
+            </div>
+          </div>
+        </article>
+
+        <article className="rounded-xl border border-slate-200 bg-white p-4">
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Notifications</h3>
+          <div className="space-y-3 text-sm text-slate-700">
+            {[
+              ["Daily digest", "dailyDigest"],
+              ["Task overdue alerts", "overdueAlerts"],
+              ["Email summaries", "emailSummaries"],
+            ].map(([label, key]) => (
+              <label key={key} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span>{label}</span>
+                <input
+                  type="checkbox"
+                  checked={Boolean(settings[key as keyof WorkspaceSettings])}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, [key]: e.target.checked }))}
+                />
+              </label>
+            ))}
+          </div>
+        </article>
+
+        <article className="rounded-xl border border-slate-200 bg-white p-4">
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Visibility</h3>
+          <div className="space-y-3 text-sm">
+            <label className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-slate-700">
+              <span>Private projects require invitation</span>
+              <input
+                type="checkbox"
+                checked={settings.privateProjects}
+                onChange={(e) => setSettings((prev) => ({ ...prev, privateProjects: e.target.checked }))}
+              />
+            </label>
+            <div className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700">
+              <label className="mb-1 block">Activity logs retained (days)</label>
+              <input
+                type="number"
+                min={1}
+                value={settings.logRetentionDays}
+                onChange={(e) => setSettings((prev) => ({ ...prev, logRetentionDays: Number(e.target.value) || 1 }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-sky-300"
+              />
+            </div>
+            <label className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-slate-700">
+              <span>Admins can export reports</span>
+              <input
+                type="checkbox"
+                checked={settings.adminsCanExport}
+                onChange={(e) => setSettings((prev) => ({ ...prev, adminsCanExport: e.target.checked }))}
+              />
+            </label>
+          </div>
+        </article>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center justify-between">
+          {settingsStatus ? <p className="text-sm text-emerald-700">{settingsStatus}</p> : <span />}
+          <button type="button" onClick={saveSettings} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+            Save Workspace Settings
+          </button>
+        </div>
       </div>
 
       <form onSubmit={onSubmit} className="rounded-xl border border-slate-200 bg-white p-4">
@@ -100,3 +208,4 @@ export default function SettingsPage() {
     </section>
   );
 }
+

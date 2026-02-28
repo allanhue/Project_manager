@@ -2,13 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { listProjects, Project } from "../auth/auth";
+import { LoadingSpinner } from "../componets/LoadingSpinner";
 
 function percent(value: number, total: number) {
   if (!total) return 0;
   return Math.round((value / total) * 100);
 }
 
-export default function AnalyticsPage() {
+type AnalyticsPageProps = {
+  searchQuery?: string;
+};
+
+export default function AnalyticsPage({ searchQuery = "" }: AnalyticsPageProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -30,11 +35,25 @@ export default function AnalyticsPage() {
     };
   }, []);
 
+  const filteredProjects = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return projects;
+    return projects.filter((project) => `${project.name} ${project.status} ${(project.assignees || []).join(" ")}`.toLowerCase().includes(q));
+  }, [projects, searchQuery]);
+
   const analytics = useMemo(() => {
-    const total = projects.length;
-    const active = projects.filter((item) => item.status === "active").length;
-    const done = projects.filter((item) => item.status === "done").length;
-    const blocked = projects.filter((item) => item.status === "blocked").length;
+    const total = filteredProjects.length;
+    const active = filteredProjects.filter((item) => item.status === "active").length;
+    const done = filteredProjects.filter((item) => item.status === "done").length;
+    const blocked = filteredProjects.filter((item) => item.status === "blocked").length;
+    const contributorCounts = new Map<string, number>();
+    filteredProjects.forEach((project) => {
+      (project.assignees || []).forEach((assignee) => contributorCounts.set(assignee, (contributorCounts.get(assignee) || 0) + 1));
+    });
+    const logs = Array.from(contributorCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([user, count]) => ({ user, count }));
     return {
       total,
       active,
@@ -43,8 +62,14 @@ export default function AnalyticsPage() {
       completion: percent(done, total),
       activeRate: percent(active, total),
       blockerRate: percent(blocked, total),
+      logs,
     };
-  }, [projects]);
+  }, [filteredProjects]);
+
+  const pieTotal = Math.max(1, analytics.total);
+  const doneDeg = (analytics.done / pieTotal) * 360;
+  const activeDeg = (analytics.active / pieTotal) * 360;
+  const blockedDeg = (analytics.blocked / pieTotal) * 360;
 
   return (
     <section className="space-y-4">
@@ -54,7 +79,7 @@ export default function AnalyticsPage() {
       </header>
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-      {loading ? <p className="text-sm text-slate-600">Calculating analytics...</p> : null}
+      {loading ? <LoadingSpinner label="Calculating analytics..." /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <article className="rounded-xl border border-slate-200 bg-white px-4 py-4">
@@ -75,9 +100,32 @@ export default function AnalyticsPage() {
         </article>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
         <article className="rounded-xl border border-slate-200 bg-white p-5">
-          <h3 className="mb-3 text-sm font-semibold text-slate-900">Operational Distribution</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Project Status Pie</h3>
+          <div className="flex items-center gap-6">
+            <div
+              className="h-40 w-40 rounded-full"
+              style={{
+                background: `conic-gradient(#10b981 0deg ${doneDeg}deg, #0ea5e9 ${doneDeg}deg ${doneDeg + activeDeg}deg, #f59e0b ${doneDeg + activeDeg}deg ${doneDeg + activeDeg + blockedDeg}deg, #e2e8f0 0deg)`,
+              }}
+            />
+            <ul className="space-y-2 text-sm text-slate-700">
+              <li className="flex items-center gap-2">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" /> Done: {analytics.done}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-sky-500" /> Active: {analytics.active}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-500" /> Blocked: {analytics.blocked}
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <article className="rounded-xl border border-slate-200 bg-white p-5">
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Execution Bar Chart</h3>
           <div className="space-y-3">
             {[
               { label: "Done", value: analytics.done, color: "bg-emerald-500" },
@@ -96,16 +144,20 @@ export default function AnalyticsPage() {
             ))}
           </div>
         </article>
-
-        <article className="rounded-xl border border-slate-200 bg-white p-5">
-          <h3 className="mb-3 text-sm font-semibold text-slate-900">Executive Insights</h3>
-          <ul className="space-y-2 text-sm text-slate-700">
-            <li className="rounded-lg bg-slate-50 px-3 py-2">Completed workstreams: {analytics.done}</li>
-            <li className="rounded-lg bg-slate-50 px-3 py-2">In-progress engagements: {analytics.active}</li>
-            <li className="rounded-lg bg-slate-50 px-3 py-2">At-risk pipelines: {analytics.blocked}</li>
-          </ul>
-        </article>
       </div>
+
+      <article className="rounded-xl border border-slate-200 bg-white p-5">
+        <h3 className="mb-3 text-sm font-semibold text-slate-900">User Logs Working on Projects</h3>
+        <ul className="space-y-2 text-sm text-slate-700">
+          {analytics.logs.length === 0 ? <li className="rounded-lg bg-slate-50 px-3 py-2">No assignee activity yet.</li> : null}
+          {analytics.logs.map((entry) => (
+            <li key={entry.user} className="rounded-lg bg-slate-50 px-3 py-2">
+              {entry.user}: assigned to {entry.count} project(s)
+            </li>
+          ))}
+        </ul>
+      </article>
     </section>
   );
 }
+

@@ -41,6 +41,7 @@ export type Project = {
   tenant_id: string;
   name: string;
   status: string;
+  assignees: string[];
   start_date?: string | null;
   due_date?: string | null;
   duration_days: number;
@@ -99,6 +100,35 @@ export type SystemTenant = {
   slug: string;
   name: string;
   logo_url: string;
+  created_at: string;
+};
+
+export type TenantUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+export type ForumPost = {
+  id: number;
+  tenant_id: string;
+  author_email: string;
+  title: string;
+  body: string;
+  created_at: string;
+};
+
+export type IssueItem = {
+  id: number;
+  tenant_id: string;
+  project_id?: number | null;
+  project_name?: string;
+  title: string;
+  description: string;
+  severity: string;
+  status: string;
+  created_by_email: string;
   created_at: string;
 };
 
@@ -291,6 +321,7 @@ export async function listProjects(): Promise<Project[]> {
 export async function createProject(input: {
   name: string;
   status?: string;
+  assignees?: string[];
   start_date: string;
   duration_days: number;
   team_size: number;
@@ -327,6 +358,67 @@ export async function createTask(input: {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
   return requestJSON<TaskItem>("/api/v1/tasks", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listUsers(): Promise<TenantUser[]> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: TenantUser[] }>("/api/v1/users", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return payload.items || [];
+}
+
+export async function listForumPosts(): Promise<ForumPost[]> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: ForumPost[] }>("/api/v1/forum/posts", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return payload.items || [];
+}
+
+export async function createForumPost(input: { title: string; body: string }): Promise<ForumPost> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<ForumPost>("/api/v1/forum/posts", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listIssues(): Promise<IssueItem[]> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: IssueItem[] }>("/api/v1/issues", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return payload.items || [];
+}
+
+export async function createIssue(input: {
+  project_id?: number | null;
+  title: string;
+  description: string;
+  severity?: string;
+}): Promise<IssueItem> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<IssueItem>("/api/v1/issues", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

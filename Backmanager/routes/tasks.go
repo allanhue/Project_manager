@@ -44,6 +44,38 @@ func (s *Service) EnsureTasksTable() error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS subtasks JSONB NOT NULL DEFAULT '[]'::jsonb;
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM information_schema.columns
+				WHERE table_schema = 'public' AND table_name = 'tasks' AND column_name = 'project_id' AND data_type = 'text'
+			) THEN
+				ALTER TABLE tasks
+				ALTER COLUMN project_id TYPE BIGINT
+				USING CASE
+					WHEN project_id IS NULL OR trim(project_id) = '' THEN NULL
+					WHEN project_id ~ '^[0-9]+$' THEN project_id::BIGINT
+					ELSE NULL
+				END;
+			END IF;
+		END $$;
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1
+				FROM information_schema.columns
+				WHERE table_schema = 'public' AND table_name = 'tasks' AND column_name = 'subtasks' AND data_type <> 'jsonb'
+			) THEN
+				ALTER TABLE tasks
+				ALTER COLUMN subtasks TYPE JSONB
+				USING
+					CASE
+						WHEN subtasks IS NULL THEN '[]'::jsonb
+						ELSE to_jsonb(ARRAY[subtasks::text])
+					END;
+			END IF;
+		END $$;
 		CREATE INDEX IF NOT EXISTS idx_tasks_tenant_id ON tasks (tenant_id);
 	`)
 	return err
@@ -77,14 +109,12 @@ func (s *Service) ListTasks(c *gin.Context) {
 		if projectID.Valid {
 			item.ProjectID = projectID.Int64
 		}
-		item.Subtasks = make([]string, 0)
-		if len(subtasksRaw) > 0 {
-			if err := json.Unmarshal(subtasksRaw, &item.Subtasks); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid subtasks data"})
-				return
-			}
-		}
+		item.Subtasks = parseStringArrayJSON(subtasksRaw)
 		tasks = append(tasks, item)
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": tasks})
 }
@@ -146,4 +176,33 @@ func (s *Service) CreateTask(c *gin.Context) {
 		"Task created",
 		"Your task '"+item.Title+"' was created successfully.",
 	)
+}
+
+func parseStringArrayJSON(raw []byte) []string {
+	if len(raw) == 0 {
+		return []string{}
+	}
+
+	direct := make([]string, 0)
+	if err := json.Unmarshal(raw, &direct); err == nil {
+		return direct
+	}
+
+	var generic []interface{}
+	if err := json.Unmarshal(raw, &generic); err == nil {
+		out := make([]string, 0, len(generic))
+		for _, v := range generic {
+			s, ok := v.(string)
+			if !ok {
+				continue
+			}
+			s = strings.TrimSpace(s)
+			if s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+
+	return []string{}
 }

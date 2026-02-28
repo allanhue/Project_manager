@@ -7,15 +7,18 @@ import DashboardadminPage from "../admin/Dashboardadmin";
 import SystemAdminHome from "../admin/Home";
 import { AuthUser, getSession, logout } from "../auth/auth";
 import { Nav } from "../componets/Nav";
+import { LoadingSpinner } from "../componets/LoadingSpinner";
 import AnalyticsPage from "./Analytics";
 import CalendarPage from "./Calendar";
+import ForumPage from "./Forum";
+import IssuesPage from "./Issues";
 import ProfilePage from "./Profile";
 import ProjectsPage from "./Projects";
 import { Sidebar } from "./Sidebar";
 import SettingsPage from "./Settings";
 import TasksPage from "./Task";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "calendar" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
 
 const stats = [
   { label: "Receivables", value: "KES 1.42M", change: "+9% vs last month" },
@@ -116,6 +119,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState<PageKey>("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
 
@@ -147,15 +151,17 @@ export default function Dashboard() {
       return <SystemAdminDashboardPage />;
     }
 
-    if (currentPage === "projects") return <ProjectsPage />;
-    if (currentPage === "tasks") return <TasksPage />;
-    if (currentPage === "analytics") return <AnalyticsPage />;
+    if (currentPage === "projects") return <ProjectsPage searchQuery={searchQuery} />;
+    if (currentPage === "tasks") return <TasksPage searchQuery={searchQuery} />;
+    if (currentPage === "analytics") return <AnalyticsPage searchQuery={searchQuery} />;
     if (currentPage === "calendar") return <CalendarPage />;
+    if (currentPage === "forum") return <ForumPage searchQuery={searchQuery} />;
+    if (currentPage === "issues") return <IssuesPage searchQuery={searchQuery} />;
     if (currentPage === "profile" && user) return <ProfilePage user={user} />;
     if (currentPage === "settings") return <SettingsPage />;
     if (currentPage === "admin") return <DashboardOverview />;
     return <DashboardOverview />;
-  }, [currentPage, user]);
+  }, [currentPage, searchQuery, user]);
 
   useEffect(() => {
     if (user?.role === "system_admin") {
@@ -169,8 +175,16 @@ export default function Dashboard() {
     }
   }, [canViewAdmin, currentPage, user?.role]);
 
+  useEffect(() => {
+    setSearchQuery("");
+  }, [currentPage]);
+
   if (!ready) {
-    return <div className="flex min-h-screen items-center justify-center bg-slate-100 text-sm text-slate-600">Loading workspace...</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100">
+        <LoadingSpinner label="Loading workspace..." />
+      </div>
+    );
   }
 
   return (
@@ -190,6 +204,8 @@ export default function Dashboard() {
           userName={user?.name || "User"}
           role={userRole}
           isSystemAdmin={isSystemAdmin}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
           onLogout={handleLogout}
         />
         <main className={`flex-1 overflow-y-auto p-4 md:p-6 ${isSystemAdmin ? "bg-sky-50" : ""}`}>{pageContent}</main>

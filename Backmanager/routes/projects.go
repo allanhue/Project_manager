@@ -2,7 +2,9 @@ package routes
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,6 +15,7 @@ type Project struct {
 	TenantID     string     `json:"tenant_id"`
 	Name         string     `json:"name"`
 	Status       string     `json:"status"`
+	Assignees    []string   `json:"assignees"`
 	StartDate    *time.Time `json:"start_date,omitempty"`
 	DueDate      *time.Time `json:"due_date,omitempty"`
 	DurationDays int        `json:"duration_days"`
@@ -21,11 +24,12 @@ type Project struct {
 }
 
 type createProjectRequest struct {
-	Name         string `json:"name" binding:"required"`
-	Status       string `json:"status"`
-	StartDate    string `json:"start_date" binding:"required"`
-	DurationDays int    `json:"duration_days" binding:"required,min=1,max=3650"`
-	TeamSize     int    `json:"team_size" binding:"required,min=1,max=10000"`
+	Name         string   `json:"name" binding:"required"`
+	Status       string   `json:"status"`
+	Assignees    []string `json:"assignees"`
+	StartDate    string   `json:"start_date" binding:"required"`
+	DurationDays int      `json:"duration_days" binding:"required,min=1,max=3650"`
+	TeamSize     int      `json:"team_size" binding:"required,min=1,max=10000"`
 }
 
 func (s *Service) EnsureBaseTables(ctx context.Context) error {
@@ -79,12 +83,14 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			tenant_id TEXT NOT NULL,
 			name TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'active',
+			assignees JSONB NOT NULL DEFAULT '[]'::jsonb,
 			start_date DATE,
 			due_date DATE,
 			duration_days INT NOT NULL DEFAULT 1,
 			team_size INT NOT NULL DEFAULT 1,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
+		ALTER TABLE projects ADD COLUMN IF NOT EXISTS assignees JSONB NOT NULL DEFAULT '[]'::jsonb;
 		ALTER TABLE projects ADD COLUMN IF NOT EXISTS start_date DATE;
 		ALTER TABLE projects ADD COLUMN IF NOT EXISTS due_date DATE;
 		ALTER TABLE projects ADD COLUMN IF NOT EXISTS duration_days INT NOT NULL DEFAULT 1;
@@ -118,6 +124,29 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 		CREATE INDEX IF NOT EXISTS idx_system_updates_scheduled_date ON system_updates (scheduled_date);
+
+		CREATE TABLE IF NOT EXISTS forum_posts (
+			id BIGSERIAL PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			author_email TEXT NOT NULL,
+			title TEXT NOT NULL,
+			body TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_forum_posts_tenant_id ON forum_posts (tenant_id);
+
+		CREATE TABLE IF NOT EXISTS issues (
+			id BIGSERIAL PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			project_id BIGINT REFERENCES projects(id) ON DELETE SET NULL,
+			title TEXT NOT NULL,
+			description TEXT NOT NULL,
+			severity TEXT NOT NULL DEFAULT 'medium',
+			status TEXT NOT NULL DEFAULT 'open',
+			created_by_email TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_issues_tenant_id ON issues (tenant_id);
 	`)
 	return err
 }
@@ -125,7 +154,7 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 func (s *Service) ListProjects(c *gin.Context) {
 	tenantID := tenantFromContext(c)
 	rows, err := s.DB.Query(c.Request.Context(), `
-		SELECT id, tenant_id, name, status, start_date, due_date, duration_days, team_size, created_at
+		SELECT id, tenant_id, name, status, COALESCE(assignees, '[]'::jsonb), start_date, due_date, duration_days, team_size, created_at
 		FROM projects
 		WHERE tenant_id = $1
 		ORDER BY id DESC
@@ -139,9 +168,17 @@ func (s *Service) ListProjects(c *gin.Context) {
 	projects := make([]Project, 0)
 	for rows.Next() {
 		var p Project
-		if err := rows.Scan(&p.ID, &p.TenantID, &p.Name, &p.Status, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt); err != nil {
+		var assigneesRaw []byte
+		if err := rows.Scan(&p.ID, &p.TenantID, &p.Name, &p.Status, &assigneesRaw, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
 			return
+		}
+		p.Assignees = make([]string, 0)
+		if len(assigneesRaw) > 0 {
+			if err := json.Unmarshal(assigneesRaw, &p.Assignees); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid assignees data"})
+				return
+			}
 		}
 		projects = append(projects, p)
 	}
@@ -165,18 +202,32 @@ func (s *Service) CreateProject(c *gin.Context) {
 		return
 	}
 	dueDate := startDate.AddDate(0, 0, req.DurationDays-1)
+	cleanAssignees := make([]string, 0, len(req.Assignees))
+	for _, assignee := range req.Assignees {
+		v := strings.TrimSpace(assignee)
+		if v != "" {
+			cleanAssignees = append(cleanAssignees, v)
+		}
+	}
+	assigneesJSON, err := json.Marshal(cleanAssignees)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid assignees payload"})
+		return
+	}
 
 	var p Project
+	var assigneesRaw []byte
 	err = s.DB.QueryRow(c.Request.Context(), `
-		INSERT INTO projects (tenant_id, name, status, start_date, due_date, duration_days, team_size)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, tenant_id, name, status, start_date, due_date, duration_days, team_size, created_at
-	`, tenantID, req.Name, req.Status, startDate, dueDate, req.DurationDays, req.TeamSize).
-		Scan(&p.ID, &p.TenantID, &p.Name, &p.Status, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt)
+		INSERT INTO projects (tenant_id, name, status, assignees, start_date, due_date, duration_days, team_size)
+		VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8)
+		RETURNING id, tenant_id, name, status, assignees, start_date, due_date, duration_days, team_size, created_at
+	`, tenantID, req.Name, req.Status, string(assigneesJSON), startDate, dueDate, req.DurationDays, req.TeamSize).
+		Scan(&p.ID, &p.TenantID, &p.Name, &p.Status, &assigneesRaw, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "insert failed"})
 		return
 	}
+	p.Assignees = cleanAssignees
 
 	c.JSON(http.StatusCreated, p)
 

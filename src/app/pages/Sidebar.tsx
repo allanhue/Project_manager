@@ -1,12 +1,11 @@
 import type { ReactNode } from "react";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "calendar" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
 
-const menu: Array<{ key: PageKey; label: string; hint: string; icon: ReactNode }> = [
+const menu: Array<{ key: PageKey; label: string; icon: ReactNode }> = [
   {
     key: "dashboard",
     label: "Dashboard",
-    hint: "Overview",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M3 13h8V3H3zM13 21h8v-6h-8zM13 11h8V3h-8zM3 21h8v-6H3z" />
@@ -16,7 +15,6 @@ const menu: Array<{ key: PageKey; label: string; hint: string; icon: ReactNode }
   {
     key: "projects",
     label: "Projects",
-    hint: "Portfolios",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M3 7h18v12H3z" />
@@ -27,7 +25,6 @@ const menu: Array<{ key: PageKey; label: string; hint: string; icon: ReactNode }
   {
     key: "tasks",
     label: "Tasks",
-    hint: "Execution board",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M9 11l2 2 4-4" />
@@ -38,7 +35,6 @@ const menu: Array<{ key: PageKey; label: string; hint: string; icon: ReactNode }
   {
     key: "analytics",
     label: "Analytics",
-    hint: "Reports",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M4 20h16" />
@@ -49,7 +45,6 @@ const menu: Array<{ key: PageKey; label: string; hint: string; icon: ReactNode }
   {
     key: "calendar",
     label: "Calendar",
-    hint: "Monthly planner",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M4 7h16v13H4z" />
@@ -60,7 +55,6 @@ const menu: Array<{ key: PageKey; label: string; hint: string; icon: ReactNode }
   {
     key: "profile",
     label: "Profile",
-    hint: "Identity",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <circle cx="12" cy="8" r="3.2" />
@@ -69,9 +63,28 @@ const menu: Array<{ key: PageKey; label: string; hint: string; icon: ReactNode }
     ),
   },
   {
+    key: "forum",
+    label: "Forum",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M4 5h16v10H8l-4 4z" />
+      </svg>
+    ),
+  },
+  {
+    key: "issues",
+    label: "Issues",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M12 9v4" />
+        <circle cx="12" cy="17" r="1" />
+        <path d="M10.3 3.4 2.9 17.1a1.5 1.5 0 0 0 1.3 2.2h15.6a1.5 1.5 0 0 0 1.3-2.2L13.7 3.4a1.5 1.5 0 0 0-3.4 0z" />
+      </svg>
+    ),
+  },
+  {
     key: "settings",
     label: "Settings",
-    hint: "Workspace config",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 1 0 12 8.5z" />
@@ -82,7 +95,6 @@ const menu: Array<{ key: PageKey; label: string; hint: string; icon: ReactNode }
   {
     key: "admin",
     label: "Admin",
-    hint: "Tenant controls",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M12 3l7 3v5c0 4.5-3.2 8.5-7 10-3.8-1.5-7-5.5-7-10V6z" />
@@ -116,19 +128,9 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
     return fallback;
   }
 
-  function displayHint(key: PageKey, fallback: string) {
-    if (role !== "system_admin") return fallback;
-    if (key === "dashboard") return "System overview";
-    if (key === "analytics") return "Detailed reports";
-    if (key === "calendar") return "Deadlines view";
-    if (key === "admin") return "Technical issues";
-    if (key === "settings") return "Tenant setup";
-    return fallback;
-  }
-
   return (
     <aside
-      className={`hidden flex-col transition-all md:flex ${collapsed ? "w-20" : "w-72"} ${
+      className={`hidden flex-col transition-[width] duration-300 ease-in-out md:flex ${collapsed ? "w-20" : "w-72"} ${
         isSystemAdmin ? "border-r border-sky-200 bg-white text-slate-900 shadow-sm" : "border-r border-slate-200 bg-white"
       }`}
     >
@@ -159,7 +161,7 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
                 <button
                   type="button"
                   onClick={() => onNavigate(item.key)}
-                  className={`w-full rounded-lg py-2 transition ${collapsed ? "px-2 text-center" : "px-3 text-left"} ${
+                  className={`w-full rounded-lg py-2 transition-all duration-200 ${collapsed ? "px-2 text-center" : "px-3 text-left"} ${
                     isActive
                       ? isSystemAdmin
                         ? "bg-sky-100 text-sky-900 ring-1 ring-sky-300"
@@ -172,12 +174,9 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
                   {collapsed ? (
                     <span className="inline-flex items-center justify-center">{item.icon}</span>
                   ) : (
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-center gap-3">
                       <span className={`mt-0.5 inline-flex items-center justify-center ${isSystemAdmin ? "text-sky-700" : "text-slate-500"}`}>{item.icon}</span>
-                      <span>
-                        <p className="text-sm font-medium">{displayLabel(item.key, item.label)}</p>
-                        <p className={`text-xs ${isSystemAdmin ? "text-slate-500" : "text-slate-500"}`}>{displayHint(item.key, item.hint)}</p>
-                      </span>
+                      <span className="text-sm font-medium">{displayLabel(item.key, item.label)}</span>
                     </div>
                   )}
                 </button>

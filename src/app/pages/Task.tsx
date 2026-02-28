@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createTask, listProjects, listTasks, Project, TaskItem } from "../auth/auth";
+import { LoadingSpinner } from "../componets/LoadingSpinner";
 
 function chipClass(status: string) {
   if (status === "done") return "bg-emerald-50 text-emerald-700";
@@ -9,7 +10,11 @@ function chipClass(status: string) {
   return "bg-slate-100 text-slate-700";
 }
 
-export default function TasksPage() {
+type TasksPageProps = {
+  searchQuery?: string;
+};
+
+export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +66,12 @@ export default function TasksPage() {
     }
   }
 
+  const filteredTasks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return tasks;
+    return tasks.filter((task) => `${task.title} ${task.priority} ${task.status} ${task.project_name || ""} ${(task.subtasks || []).join(" ")}`.toLowerCase().includes(q));
+  }, [tasks, searchQuery]);
+
   return (
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
@@ -69,18 +80,14 @@ export default function TasksPage() {
             <h2 className="text-lg font-semibold text-slate-900">Task Board</h2>
             <p className="text-sm text-slate-600">Plan daily execution, assign priorities and track delivery outcomes.</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-          >
+          <button type="button" onClick={() => setShowCreate(true)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-[1px]">
             New Task
           </button>
         </div>
       </header>
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-      {loading ? <p className="text-sm text-slate-600">Loading tasks...</p> : null}
+      {loading ? <LoadingSpinner label="Loading tasks..." /> : null}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="overflow-x-auto">
@@ -96,8 +103,8 @@ export default function TasksPage() {
               </tr>
             </thead>
             <tbody>
-              {tasks.map((task) => (
-                <tr key={task.id} className="border-b border-slate-100">
+              {filteredTasks.map((task) => (
+                <tr key={task.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-2 py-3 font-medium text-slate-900">{task.title}</td>
                   <td className="px-2 py-3 text-slate-700">{task.project_name || task.project_id}</td>
                   <td className="px-2 py-3">
@@ -120,16 +127,10 @@ export default function TasksPage() {
               <h3 className="text-lg font-semibold text-slate-900">Create Task</h3>
               <p className="mt-1 text-sm text-slate-600">Attach work to a project and break execution into subtasks.</p>
             </div>
-
             <div className="grid gap-4 p-6 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Project</label>
-                <select
-                  value={projectId}
-                  onChange={(event) => setProjectId(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
-                  required
-                >
+                <select value={projectId} onChange={(event) => setProjectId(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300" required>
                   <option value="">Select project</option>
                   {projects.map((project) => (
                     <option key={project.id} value={project.id}>
@@ -138,62 +139,33 @@ export default function TasksPage() {
                   ))}
                 </select>
               </div>
-
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
-                <select
-                  value={status}
-                  onChange={(event) => setStatus(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
-                >
+                <select value={status} onChange={(event) => setStatus(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300">
                   <option value="todo">todo</option>
                   <option value="in_progress">in_progress</option>
                   <option value="done">done</option>
                 </select>
               </div>
-
               <div className="md:col-span-2">
                 <label className="mb-1 block text-sm font-medium text-slate-700">Task Title</label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  placeholder="Prepare handoff checklist"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
-                />
+                <input type="text" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Prepare handoff checklist" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300" />
               </div>
-
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Priority</label>
-                <select
-                  value={priority}
-                  onChange={(event) => setPriority(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
-                >
+                <select value={priority} onChange={(event) => setPriority(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300">
                   <option value="low">low</option>
                   <option value="medium">medium</option>
                   <option value="high">high</option>
                 </select>
               </div>
-
               <div className="md:col-span-2">
                 <label className="mb-1 block text-sm font-medium text-slate-700">Subtasks (one per line)</label>
-                <textarea
-                  rows={6}
-                  value={subtasksText}
-                  onChange={(event) => setSubtasksText(event.target.value)}
-                  placeholder={"Create API endpoint\nAdd tests\nReview QA checklist"}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
-                />
+                <textarea rows={6} value={subtasksText} onChange={(event) => setSubtasksText(event.target.value)} placeholder={"Create API endpoint\nAdd tests\nReview QA checklist"} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300" />
               </div>
             </div>
-
             <div className="flex justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4">
-              <button
-                type="button"
-                onClick={() => setShowCreate(false)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
-              >
+              <button type="button" onClick={() => setShowCreate(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">
                 Cancel
               </button>
               <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">

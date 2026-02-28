@@ -66,10 +66,15 @@ func main() {
 	api := r.Group("/api/v1")
 	api.Use(routes.AuthMiddleware(svc.JWTSecret, svc.JWTIssuer), svc.AuditLogMiddleware())
 	{
+		api.GET("/users", svc.ListUsers)
 		api.GET("/projects", svc.ListProjects)
 		api.POST("/projects", svc.CreateProject)
 		api.GET("/tasks", svc.ListTasks)
 		api.POST("/tasks", svc.CreateTask)
+		api.GET("/forum/posts", svc.ListForumPosts)
+		api.POST("/forum/posts", svc.CreateForumPost)
+		api.GET("/issues", svc.ListIssues)
+		api.POST("/issues", svc.CreateIssue)
 		api.POST("/notifications/test", svc.TestNotification)
 		api.POST("/support/request", svc.SupportRequest)
 	}

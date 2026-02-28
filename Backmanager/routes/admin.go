@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
@@ -47,21 +48,17 @@ func (s *Service) SystemOrganizations(c *gin.Context) {
 			t.slug,
 			t.name,
 			COALESCE(t.logo_url, '') AS logo_url,
-			COUNT(DISTINCT u.id) AS user_count,
-			COUNT(DISTINCT p.id) AS project_count,
-			COUNT(DISTINCT tk.id) AS task_count,
-			COUNT(DISTINCT u.id) FILTER (WHERE u.last_login_at >= NOW() - INTERVAL '7 days') AS active_users_7d,
-			MAX(u.last_login_at) AS last_login_at,
-			COALESCE((
-				MAX(u.last_login_at) >= NOW() - INTERVAL '7 days'
-				OR MAX(p.created_at) >= NOW() - INTERVAL '7 days'
-				OR MAX(tk.created_at) >= NOW() - INTERVAL '7 days'
-			), false) AS active_workspace_7d
+			(SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id) AS user_count,
+			(SELECT COUNT(*) FROM projects p WHERE p.tenant_id = t.slug) AS project_count,
+			(SELECT COUNT(*) FROM tasks tk WHERE tk.tenant_id = t.slug) AS task_count,
+			(SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND u.last_login_at >= NOW() - INTERVAL '7 days') AS active_users_7d,
+			(SELECT MAX(u.last_login_at) FROM users u WHERE u.tenant_id = t.id) AS last_login_at,
+			(
+				EXISTS (SELECT 1 FROM users u WHERE u.tenant_id = t.id AND u.last_login_at >= NOW() - INTERVAL '7 days')
+				OR EXISTS (SELECT 1 FROM projects p WHERE p.tenant_id = t.slug AND p.created_at >= NOW() - INTERVAL '7 days')
+				OR EXISTS (SELECT 1 FROM tasks tk WHERE tk.tenant_id = t.slug AND tk.created_at >= NOW() - INTERVAL '7 days')
+			) AS active_workspace_7d
 		FROM tenants t
-		LEFT JOIN users u ON u.tenant_id = t.id
-		LEFT JOIN projects p ON p.tenant_id = t.slug
-		LEFT JOIN tasks tk ON tk.tenant_id = t.slug
-		GROUP BY t.slug, t.name
 		ORDER BY active_workspace_7d DESC, active_users_7d DESC, t.slug
 	`)
 	if err != nil {
@@ -73,6 +70,7 @@ func (s *Service) SystemOrganizations(c *gin.Context) {
 	items := make([]organizationSummary, 0)
 	for rows.Next() {
 		var row organizationSummary
+		var lastLogin sql.NullTime
 		if err := rows.Scan(
 			&row.TenantSlug,
 			&row.TenantName,
@@ -81,13 +79,23 @@ func (s *Service) SystemOrganizations(c *gin.Context) {
 			&row.ProjectCount,
 			&row.TaskCount,
 			&row.ActiveUsers7d,
-			&row.LastLoginAt,
+			&lastLogin,
 			&row.ActiveWorkspace7d,
 		); err != nil {
 			c.JSON(500, gin.H{"error": "scan failed"})
 			return
 		}
+		if lastLogin.Valid {
+			t := lastLogin.Time
+			row.LastLoginAt = &t
+		} else {
+			row.LastLoginAt = nil
+		}
 		items = append(items, row)
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(500, gin.H{"error": "scan failed"})
+		return
 	}
 
 	c.JSON(200, gin.H{"items": items})

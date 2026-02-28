@@ -129,7 +129,7 @@ export default function AuthPage() {
 
             <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
             <p className="mt-1 text-sm text-slate-600">
-              {mode === "login" ? "Enter your email and password to continue." : "Use a unique organization name and a unique email."}
+              {mode === "login" ? "Enter your email and password to continue." : "Fill in the details to create your account and workspace."}
             </p>
 
             {mode === "register" ? (

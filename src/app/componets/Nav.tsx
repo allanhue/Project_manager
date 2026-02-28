@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getSystemLogs, listProjects, listTasks, Project, TaskItem } from "../auth/auth";
+import { getSystemLogs, listProjects, listTasks, Project, sendSupportRequest } from "../auth/auth";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "calendar" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
 
 const titles: Record<PageKey, string> = {
   dashboard: "Dashboard",
@@ -11,6 +11,8 @@ const titles: Record<PageKey, string> = {
   tasks: "Tasks",
   analytics: "Analytics",
   calendar: "Calendar",
+  forum: "Forum",
+  issues: "Issues",
   profile: "Profile",
   settings: "Settings",
   admin: "Admin",
@@ -30,12 +32,19 @@ type NavProps = {
   userName: string;
   role: "system_admin" | "org_admin";
   isSystemAdmin: boolean;
+  searchQuery: string;
+  onSearchChange: (value: string) => void;
   onLogout: () => void;
 };
 
-export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, onLogout }: NavProps) {
+export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, searchQuery, onSearchChange, onLogout }: NavProps) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [supportSubject, setSupportSubject] = useState("");
+  const [supportPriority, setSupportPriority] = useState("normal");
+  const [supportMessage, setSupportMessage] = useState("");
+  const [supportStatus, setSupportStatus] = useState("");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
@@ -126,6 +135,8 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, on
           { key: "tasks", label: "Tasks" },
           { key: "analytics", label: "Analytics" },
           { key: "calendar", label: "Calendar" },
+          { key: "forum", label: "Forum" },
+          { key: "issues", label: "Issues" },
           { key: "profile", label: "Profile" },
           { key: "settings", label: "Settings" },
         ];
@@ -145,6 +156,18 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, on
       : titles[currentPage];
 
   const unreadCount = useMemo(() => notifications.length, [notifications]);
+  const searchPlaceholder =
+    currentPage === "projects"
+      ? "Search projects, assignees..."
+      : currentPage === "tasks"
+        ? "Search tasks, subtasks..."
+        : currentPage === "calendar"
+          ? "Search calendar updates..."
+          : currentPage === "forum"
+            ? "Search forum posts..."
+            : currentPage === "issues"
+              ? "Search issues..."
+              : "Search this module...";
 
   return (
     <header className={`border-b px-4 py-4 md:px-6 ${isSystemAdmin ? "border-sky-200 bg-white" : "border-slate-200 bg-white"}`}>
@@ -174,7 +197,9 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, on
         <div className="relative flex flex-wrap items-center gap-2 md:gap-3">
           <input
             type="search"
-            placeholder="Search projects, tasks, activities..."
+            placeholder={searchPlaceholder}
+            value={searchQuery}
+            onChange={(event) => onSearchChange(event.target.value)}
             className={`w-full min-w-[180px] rounded-lg border px-3 py-2 text-sm outline-none transition md:w-72 ${
               isSystemAdmin
                 ? "border-sky-200 bg-sky-50 text-slate-900 focus:border-sky-400"
@@ -182,43 +207,62 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, on
             }`}
           />
 
-          <button
-            type="button"
-            onClick={() => setNotifOpen((prev) => !prev)}
-            className={`relative rounded-lg border px-3 py-2 text-sm transition hover:-translate-y-[1px] ${isSystemAdmin ? "border-sky-200 bg-sky-50 text-slate-800 hover:bg-sky-100" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
-            aria-label="Notifications"
-          >
-            <span className="inline-flex items-center gap-2">
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V10a6 6 0 1 0-12 0v4.2a2 2 0 0 1-.6 1.4L4 17h5" />
-                <path d="M10 18a2 2 0 0 0 4 0" />
-              </svg>
-              <span>Alerts</span>
-            </span>
-            {unreadCount > 0 ? (
-              <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-600 px-1 text-[11px] font-semibold text-white">
-                {unreadCount}
-              </span>
-            ) : null}
-          </button>
-
-          {role === "org_admin" ? (
+          <div className={`inline-flex items-center gap-2 rounded-xl border p-1 ${isSystemAdmin ? "border-sky-200 bg-sky-50" : "border-slate-200 bg-slate-50"}`}>
             <button
               type="button"
-              onClick={() => setHelpOpen((prev) => !prev)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:-translate-y-[1px] hover:bg-slate-50"
-              aria-label="Help"
+              onClick={() => setNotifOpen((prev) => !prev)}
+              className={`relative rounded-lg border px-3 py-2 text-sm transition hover:-translate-y-[1px] ${isSystemAdmin ? "border-sky-200 bg-white text-slate-800 hover:bg-sky-100" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+              aria-label="Notifications"
             >
               <span className="inline-flex items-center gap-2">
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M9.1 9a3 3 0 1 1 4.7 2.5c-.7.5-1.3.9-1.3 1.8v.2" />
-                  <circle cx="12" cy="17" r="1" />
+                  <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V10a6 6 0 1 0-12 0v4.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                  <path d="M10 18a2 2 0 0 0 4 0" />
                 </svg>
-                <span>Help</span>
+                <span>Alerts</span>
               </span>
+              {unreadCount > 0 ? (
+                <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-600 px-1 text-[11px] font-semibold text-white">
+                  {unreadCount}
+                </span>
+              ) : null}
             </button>
-          ) : null}
+
+            {role === "org_admin" ? (
+              <button
+                type="button"
+                onClick={() => setSupportOpen((prev) => !prev)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:-translate-y-[1px] hover:bg-slate-50"
+                aria-label="Support mailbox"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M4 6h16v12H4z" />
+                    <path d="m4 8 8 6 8-6" />
+                  </svg>
+                  <span>Support</span>
+                </span>
+              </button>
+            ) : null}
+
+            {role === "org_admin" ? (
+              <button
+                type="button"
+                onClick={() => setHelpOpen((prev) => !prev)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:-translate-y-[1px] hover:bg-slate-50"
+                aria-label="Help"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M9.1 9a3 3 0 1 1 4.7 2.5c-.7.5-1.3.9-1.3 1.8v.2" />
+                    <circle cx="12" cy="17" r="1" />
+                  </svg>
+                  <span>Help</span>
+                </span>
+              </button>
+            ) : null}
+          </div>
 
           <div className={`rounded-full border px-3 py-1.5 text-sm font-medium ${isSystemAdmin ? "border-sky-200 bg-sky-50 text-slate-800" : "border-slate-200 bg-white text-slate-700"}`}>
             {userName}
@@ -299,6 +343,68 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, on
                 <p className="mt-1">Open Settings to submit support requests to system administration.</p>
               </article>
             </div>
+          </aside>
+        </div>
+      ) : null}
+
+      {supportOpen ? (
+        <div className="fixed inset-0 z-40">
+          <button type="button" onClick={() => setSupportOpen(false)} className="absolute inset-0 bg-slate-950/25" aria-label="Close support" />
+          <aside className="absolute right-0 top-0 h-full w-full max-w-md border-l border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <p className="text-sm font-semibold text-slate-900">Support Mailbox</p>
+              <button type="button" onClick={() => setSupportOpen(false)} className="text-xs text-slate-500">
+                Close
+              </button>
+            </div>
+            <form
+              className="space-y-3 p-4"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                setSupportStatus("Sending...");
+                try {
+                  await sendSupportRequest({ subject: supportSubject, priority: supportPriority, message: supportMessage });
+                  setSupportStatus("Support request sent.");
+                  setSupportSubject("");
+                  setSupportPriority("normal");
+                  setSupportMessage("");
+                } catch (err) {
+                  setSupportStatus(err instanceof Error ? err.message : "Failed to send support request.");
+                }
+              }}
+            >
+              <input
+                type="text"
+                required
+                value={supportSubject}
+                onChange={(event) => setSupportSubject(event.target.value)}
+                placeholder="Subject"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+              />
+              <select
+                value={supportPriority}
+                onChange={(event) => setSupportPriority(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+              >
+                <option value="low">low</option>
+                <option value="normal">normal</option>
+                <option value="high">high</option>
+              </select>
+              <textarea
+                required
+                rows={6}
+                value={supportMessage}
+                onChange={(event) => setSupportMessage(event.target.value)}
+                placeholder="Describe the issue and impact."
+                className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+              />
+              <div className="flex items-center justify-between gap-3">
+                {supportStatus ? <p className="text-xs text-slate-600">{supportStatus}</p> : <span />}
+                <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+                  Send
+                </button>
+              </div>
+            </form>
           </aside>
         </div>
       ) : null}
