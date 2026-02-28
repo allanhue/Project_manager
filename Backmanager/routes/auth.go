@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strings"
 	"time"
@@ -119,12 +120,18 @@ func (s *Service) Register(c *gin.Context) {
 		return
 	}
 
+	userPublicID, err := s.generateUserPublicID(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "user id generation failed"})
+		return
+	}
 	var userID int64
+	var createdPublicID string
 	err = tx.QueryRow(c.Request.Context(), `
-		INSERT INTO users (tenant_id, name, email, password_hash, role)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id
-	`, tenantID, req.Name, req.Email, string(hash), role).Scan(&userID)
+		INSERT INTO users (tenant_id, name, email, password_hash, role, public_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, public_id
+	`, tenantID, req.Name, req.Email, string(hash), role, userPublicID).Scan(&userID, &createdPublicID)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "user already exists for this tenant"})
 		return
@@ -135,7 +142,7 @@ func (s *Service) Register(c *gin.Context) {
 		return
 	}
 
-	token, err := s.issueToken(userID, req.TenantSlug, req.Email, req.Name, req.TenantName, tenantLogo, role)
+	token, err := s.issueToken(createdPublicID, req.TenantSlug, req.Email, req.Name, req.TenantName, tenantLogo, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 		return
@@ -144,7 +151,7 @@ func (s *Service) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"token": token,
 		"user": gin.H{
-			"id":          userID,
+			"id":          createdPublicID,
 			"name":        req.Name,
 			"email":       req.Email,
 			"tenant_slug": req.TenantSlug,
@@ -175,30 +182,42 @@ func (s *Service) Login(c *gin.Context) {
 	var hash string
 	var role string
 	var name string
+	var userPublicID string
 	var tenantSlug string
 	var tenantName string
 	var tenantLogo string
 	var err error
 	if req.TenantSlug != "" {
 		err = s.DB.QueryRow(c.Request.Context(), `
-			SELECT u.id, u.password_hash, u.role, u.name, t.slug, t.name, t.logo_url
+			SELECT u.id, u.public_id, u.password_hash, u.role, u.name, t.slug, t.name, t.logo_url
 			FROM users u
 			JOIN tenants t ON t.id = u.tenant_id
 			WHERE t.slug = $1 AND lower(u.email) = lower($2)
-		`, req.TenantSlug, req.Email).Scan(&userID, &hash, &role, &name, &tenantSlug, &tenantName, &tenantLogo)
+		`, req.TenantSlug, req.Email).Scan(&userID, &userPublicID, &hash, &role, &name, &tenantSlug, &tenantName, &tenantLogo)
 	} else {
 		err = s.DB.QueryRow(c.Request.Context(), `
-			SELECT u.id, u.password_hash, u.role, u.name, t.slug, t.name, t.logo_url
+			SELECT u.id, u.public_id, u.password_hash, u.role, u.name, t.slug, t.name, t.logo_url
 			FROM users u
 			JOIN tenants t ON t.id = u.tenant_id
 			WHERE lower(u.email) = lower($1)
 			ORDER BY u.id DESC
 			LIMIT 1
-		`, req.Email).Scan(&userID, &hash, &role, &name, &tenantSlug, &tenantName, &tenantLogo)
+		`, req.Email).Scan(&userID, &userPublicID, &hash, &role, &name, &tenantSlug, &tenantName, &tenantLogo)
 	}
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
+	}
+	if !isValidPublicID(userPublicID) {
+		userPublicID, err = s.generateUserPublicID(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "user id generation failed"})
+			return
+		}
+		if _, err := s.DB.Exec(c.Request.Context(), `UPDATE users SET public_id = $1 WHERE id = $2`, userPublicID, userID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "user id update failed"})
+			return
+		}
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)); err != nil {
@@ -208,7 +227,7 @@ func (s *Service) Login(c *gin.Context) {
 
 	_, _ = s.DB.Exec(c.Request.Context(), `UPDATE users SET last_login_at = NOW() WHERE id = $1`, userID)
 
-	token, err := s.issueToken(userID, tenantSlug, req.Email, name, tenantName, tenantLogo, role)
+	token, err := s.issueToken(userPublicID, tenantSlug, req.Email, name, tenantName, tenantLogo, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 		return
@@ -217,7 +236,7 @@ func (s *Service) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"token": token,
 		"user": gin.H{
-			"id":          userID,
+			"id":          userPublicID,
 			"name":        name,
 			"email":       req.Email,
 			"tenant_slug": tenantSlug,
@@ -321,10 +340,10 @@ func generateTemporaryPassword(length int) (string, error) {
 	return string(out), nil
 }
 
-func (s *Service) issueToken(userID int64, tenantSlug, email, name, tenantName, tenantLogo, role string) (string, error) {
+func (s *Service) issueToken(userID, tenantSlug, email, name, tenantName, tenantLogo, role string) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"sub":         fmt.Sprintf("%d", userID),
+		"sub":         userID,
 		"tenant_id":   tenantSlug,
 		"tenant_name": tenantName,
 		"tenant_logo": tenantLogo,
@@ -337,6 +356,38 @@ func (s *Service) issueToken(userID int64, tenantSlug, email, name, tenantName, 
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return tok.SignedString(s.JWTSecret)
+}
+
+func isValidPublicID(v string) bool {
+	if len(v) != 7 {
+		return false
+	}
+	for _, ch := range v {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Service) generateUserPublicID(ctx context.Context) (string, error) {
+	const maxAttempts = 20
+	for i := 0; i < maxAttempts; i++ {
+		n, err := rand.Int(rand.Reader, big.NewInt(9000000))
+		if err != nil {
+			return "", err
+		}
+		candidate := fmt.Sprintf("%07d", 1000000+n.Int64())
+		var existing int64
+		err = s.DB.QueryRow(ctx, `SELECT id FROM users WHERE public_id = $1 LIMIT 1`, candidate).Scan(&existing)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return candidate, nil
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	return "", errors.New("failed to allocate unique 7-digit user id")
 }
 
 func normalizeSlug(v string) string {

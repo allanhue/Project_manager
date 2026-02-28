@@ -2,27 +2,32 @@ package routes
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin" 
+	"github.com/gin-gonic/gin"
 )
 
 type Task struct {
-	ID        int64     `json:"id"`
-	TenantID  string    `json:"tenant_id"`
-	ProjectID *int64    `json:"project_id,omitempty"`
-	Title     string    `json:"title"`
-	Status    string    `json:"status"`
-	Priority  string    `json:"priority"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          int64     `json:"id"`
+	TenantID    string    `json:"tenant_id"`
+	ProjectID   int64     `json:"project_id"`
+	ProjectName string    `json:"project_name,omitempty"`
+	Title       string    `json:"title"`
+	Status      string    `json:"status"`
+	Priority    string    `json:"priority"`
+	Subtasks    []string  `json:"subtasks"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type createTaskRequest struct {
-	ProjectID *int64 `json:"project_id"`
-	Title     string `json:"title" binding:"required"`
-	Status    string `json:"status"`
-	Priority  string `json:"priority"`
+	ProjectID int64    `json:"project_id" binding:"required,gt=0"`
+	Title     string   `json:"title" binding:"required"`
+	Status    string   `json:"status"`
+	Priority  string   `json:"priority"`
+	Subtasks  []string `json:"subtasks"`
 }
 
 func (s *Service) EnsureTasksTable() error {
@@ -30,12 +35,14 @@ func (s *Service) EnsureTasksTable() error {
 		CREATE TABLE IF NOT EXISTS tasks (
 			id BIGSERIAL PRIMARY KEY,
 			tenant_id TEXT NOT NULL,
-			project_id BIGINT REFERENCES projects(id) ON DELETE SET NULL,
+			project_id BIGINT REFERENCES projects(id) ON DELETE CASCADE,
 			title TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'todo',
 			priority TEXT NOT NULL DEFAULT 'medium',
+			subtasks JSONB NOT NULL DEFAULT '[]'::jsonb,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
+		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS subtasks JSONB NOT NULL DEFAULT '[]'::jsonb;
 		CREATE INDEX IF NOT EXISTS idx_tasks_tenant_id ON tasks (tenant_id);
 	`)
 	return err
@@ -44,10 +51,11 @@ func (s *Service) EnsureTasksTable() error {
 func (s *Service) ListTasks(c *gin.Context) {
 	tenantID := tenantFromContext(c)
 	rows, err := s.DB.Query(c.Request.Context(), `
-		SELECT id, tenant_id, project_id, title, status, priority, created_at
-		FROM tasks
-		WHERE tenant_id = $1
-		ORDER BY id DESC  
+		SELECT tk.id, tk.tenant_id, tk.project_id, tk.title, tk.status, tk.priority, COALESCE(tk.subtasks, '[]'::jsonb), tk.created_at, COALESCE(p.name, '')
+		FROM tasks tk
+		LEFT JOIN projects p ON p.id = tk.project_id
+		WHERE tk.tenant_id = $1
+		ORDER BY tk.id DESC
 	`, tenantID)
 	// In a real app, you'd want pagination here instead of returning all tasks at once.
 	if err != nil {
@@ -59,9 +67,17 @@ func (s *Service) ListTasks(c *gin.Context) {
 	tasks := make([]Task, 0)
 	for rows.Next() {
 		var item Task
-		if err := rows.Scan(&item.ID, &item.TenantID, &item.ProjectID, &item.Title, &item.Status, &item.Priority, &item.CreatedAt); err != nil {
+		var subtasksRaw []byte
+		if err := rows.Scan(&item.ID, &item.TenantID, &item.ProjectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt, &item.ProjectName); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
 			return
+		}
+		item.Subtasks = make([]string, 0)
+		if len(subtasksRaw) > 0 {
+			if err := json.Unmarshal(subtasksRaw, &item.Subtasks); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid subtasks data"})
+				return
+			}
 		}
 		tasks = append(tasks, item)
 	}
@@ -81,18 +97,43 @@ func (s *Service) CreateTask(c *gin.Context) {
 	if req.Priority == "" {
 		req.Priority = "medium"
 	}
+	cleanSubtasks := make([]string, 0, len(req.Subtasks))
+	for _, subtask := range req.Subtasks {
+		t := strings.TrimSpace(subtask)
+		if t != "" {
+			cleanSubtasks = append(cleanSubtasks, t)
+		}
+	}
+
+	var projectName string
+	if err := s.DB.QueryRow(c.Request.Context(), `
+		SELECT name
+		FROM projects
+		WHERE id = $1 AND tenant_id = $2
+	`, req.ProjectID, tenantID).Scan(&projectName); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "project not found for this tenant"})
+		return
+	}
+	subtasksJSON, err := json.Marshal(cleanSubtasks)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid subtasks payload"})
+		return
+	}
 
 	var item Task
-	err := s.DB.QueryRow(c.Request.Context(), `
-		INSERT INTO tasks (tenant_id, project_id, title, status, priority)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, tenant_id, project_id, title, status, priority, created_at
-	`, tenantID, req.ProjectID, req.Title, req.Status, req.Priority).
-		Scan(&item.ID, &item.TenantID, &item.ProjectID, &item.Title, &item.Status, &item.Priority, &item.CreatedAt)
+	var subtasksRaw []byte
+	err = s.DB.QueryRow(c.Request.Context(), `
+		INSERT INTO tasks (tenant_id, project_id, title, status, priority, subtasks)
+		VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+		RETURNING id, tenant_id, project_id, title, status, priority, subtasks, created_at
+	`, tenantID, req.ProjectID, req.Title, req.Status, req.Priority, string(subtasksJSON)).
+		Scan(&item.ID, &item.TenantID, &item.ProjectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "insert failed"})
 		return
 	}
+	item.ProjectName = projectName
+	item.Subtasks = cleanSubtasks
 	c.JSON(http.StatusCreated, item)
 
 	s.sendAsyncNotification(

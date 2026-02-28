@@ -16,6 +16,9 @@ export default function ProjectsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newStatus, setNewStatus] = useState("active");
+  const [newStartDate, setNewStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [newDurationDays, setNewDurationDays] = useState(30);
+  const [newTeamSize, setNewTeamSize] = useState(3);
 
   async function loadProjects() {
     setLoading(true);
@@ -39,10 +42,19 @@ export default function ProjectsPage() {
     if (!newName.trim()) return;
     setError("");
     try {
-      const created = await createProject({ name: newName.trim(), status: newStatus });
+      const created = await createProject({
+        name: newName.trim(),
+        status: newStatus,
+        start_date: newStartDate,
+        duration_days: newDurationDays,
+        team_size: newTeamSize,
+      });
       setProjects((prev) => [created, ...prev]);
       setNewName("");
       setNewStatus("active");
+      setNewStartDate(new Date().toISOString().slice(0, 10));
+      setNewDurationDays(30);
+      setNewTeamSize(3);
       setShowCreate(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create project.");
@@ -91,11 +103,13 @@ export default function ProjectsPage() {
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-left text-sm">
+          <table className="w-full min-w-[920px] text-left text-sm">
             <thead className="text-slate-500">
               <tr className="border-b border-slate-200">
                 <th className="px-2 py-2 font-medium">Project</th>
                 <th className="px-2 py-2 font-medium">Status</th>
+                <th className="px-2 py-2 font-medium">Time Frame</th>
+                <th className="px-2 py-2 font-medium">Team Size</th>
                 <th className="px-2 py-2 font-medium">Created</th>
               </tr>
             </thead>
@@ -108,6 +122,12 @@ export default function ProjectsPage() {
                       {project.status}
                     </span>
                   </td>
+                  <td className="px-2 py-3 text-slate-700">
+                    {project.start_date && project.due_date
+                      ? `${new Date(project.start_date).toLocaleDateString()} - ${new Date(project.due_date).toLocaleDateString()} (${project.duration_days} days)`
+                      : `${project.duration_days} days`}
+                  </td>
+                  <td className="px-2 py-3 text-slate-700">{project.team_size}</td>
                   <td className="px-2 py-3 text-slate-700">{new Date(project.created_at).toLocaleString()}</td>
                 </tr>
               ))}
@@ -138,6 +158,31 @@ export default function ProjectsPage() {
                 <option value="done">done</option>
                 <option value="blocked">blocked</option>
               </select>
+              <input
+                type="date"
+                value={newStartDate}
+                onChange={(event) => setNewStartDate(event.target.value)}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                required
+              />
+              <input
+                type="number"
+                min={1}
+                value={newDurationDays}
+                onChange={(event) => setNewDurationDays(Number(event.target.value))}
+                placeholder="Duration in days"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                required
+              />
+              <input
+                type="number"
+                min={1}
+                value={newTeamSize}
+                onChange={(event) => setNewTeamSize(Number(event.target.value))}
+                placeholder="People assigned"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                required
+              />
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <button

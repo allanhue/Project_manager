@@ -41,16 +41,22 @@ export type Project = {
   tenant_id: string;
   name: string;
   status: string;
+  start_date?: string | null;
+  due_date?: string | null;
+  duration_days: number;
+  team_size: number;
   created_at: string;
 };
 
 export type TaskItem = {
   id: number;
   tenant_id: string;
-  project_id?: number | null;
+  project_id: number;
+  project_name?: string;
   title: string;
   status: string;
   priority: string;
+  subtasks: string[];
   created_at: string;
 };
 
@@ -189,7 +195,7 @@ export async function registerUser(input: RegisterInput): Promise<{ ok: true; us
   try {
     const payload = await requestJSON<{
       token: string;
-      user: { id: number; name: string; email: string; tenant_slug: string };
+      user: { id: string; name: string; email: string; tenant_slug: string };
     }>("/api/v1/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -272,7 +278,13 @@ export async function listProjects(): Promise<Project[]> {
   return payload.items || [];
 }
 
-export async function createProject(input: { name: string; status?: string }): Promise<Project> {
+export async function createProject(input: {
+  name: string;
+  status?: string;
+  start_date: string;
+  duration_days: number;
+  team_size: number;
+}): Promise<Project> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
   return requestJSON<Project>("/api/v1/projects", {
@@ -295,7 +307,13 @@ export async function listTasks(): Promise<TaskItem[]> {
   return payload.items || [];
 }
 
-export async function createTask(input: { title: string; status?: string; priority?: string; project_id?: number | null }): Promise<TaskItem> {
+export async function createTask(input: {
+  title: string;
+  status?: string;
+  priority?: string;
+  project_id: number;
+  subtasks?: string[];
+}): Promise<TaskItem> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
   return requestJSON<TaskItem>("/api/v1/tasks", {

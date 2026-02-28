@@ -9,16 +9,23 @@ import (
 )
 
 type Project struct {
-	ID        int64     `json:"id"`
-	TenantID  string    `json:"tenant_id"`
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           int64      `json:"id"`
+	TenantID     string     `json:"tenant_id"`
+	Name         string     `json:"name"`
+	Status       string     `json:"status"`
+	StartDate    *time.Time `json:"start_date,omitempty"`
+	DueDate      *time.Time `json:"due_date,omitempty"`
+	DurationDays int        `json:"duration_days"`
+	TeamSize     int        `json:"team_size"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 type createProjectRequest struct {
-	Name   string `json:"name" binding:"required"`
-	Status string `json:"status"`
+	Name         string `json:"name" binding:"required"`
+	Status       string `json:"status"`
+	StartDate    string `json:"start_date" binding:"required"`
+	DurationDays int    `json:"duration_days" binding:"required,min=1,max=3650"`
+	TeamSize     int    `json:"team_size" binding:"required,min=1,max=10000"`
 }
 
 func (s *Service) EnsureBaseTables(ctx context.Context) error {
@@ -34,6 +41,7 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 
 		CREATE TABLE IF NOT EXISTS users (
 			id BIGSERIAL PRIMARY KEY,
+			public_id TEXT,
 			tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 			name TEXT NOT NULL,
 			email TEXT NOT NULL,
@@ -45,14 +53,42 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 		);
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'org_admin';
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS public_id TEXT;
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_public_id ON users (public_id) WHERE public_id IS NOT NULL;
+
+		DO $$
+		DECLARE
+			row_record RECORD;
+			candidate TEXT;
+		BEGIN
+			FOR row_record IN
+				SELECT id
+				FROM users
+				WHERE public_id IS NULL OR public_id !~ '^[0-9]{7}$'
+			LOOP
+				LOOP
+					candidate := LPAD((FLOOR(RANDOM() * 9000000) + 1000000)::TEXT, 7, '0');
+					EXIT WHEN NOT EXISTS (SELECT 1 FROM users WHERE public_id = candidate);
+				END LOOP;
+				UPDATE users SET public_id = candidate WHERE id = row_record.id;
+			END LOOP;
+		END $$;
 
 		CREATE TABLE IF NOT EXISTS projects (
 			id BIGSERIAL PRIMARY KEY,
 			tenant_id TEXT NOT NULL,
 			name TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'active',
+			start_date DATE,
+			due_date DATE,
+			duration_days INT NOT NULL DEFAULT 1,
+			team_size INT NOT NULL DEFAULT 1,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
+		ALTER TABLE projects ADD COLUMN IF NOT EXISTS start_date DATE;
+		ALTER TABLE projects ADD COLUMN IF NOT EXISTS due_date DATE;
+		ALTER TABLE projects ADD COLUMN IF NOT EXISTS duration_days INT NOT NULL DEFAULT 1;
+		ALTER TABLE projects ADD COLUMN IF NOT EXISTS team_size INT NOT NULL DEFAULT 1;
 
 		CREATE INDEX IF NOT EXISTS idx_projects_tenant_id ON projects (tenant_id);
 		CREATE INDEX IF NOT EXISTS idx_users_tenant_email ON users (tenant_id, email);
@@ -78,7 +114,7 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 func (s *Service) ListProjects(c *gin.Context) {
 	tenantID := tenantFromContext(c)
 	rows, err := s.DB.Query(c.Request.Context(), `
-		SELECT id, tenant_id, name, status, created_at
+		SELECT id, tenant_id, name, status, start_date, due_date, duration_days, team_size, created_at
 		FROM projects
 		WHERE tenant_id = $1
 		ORDER BY id DESC
@@ -92,7 +128,7 @@ func (s *Service) ListProjects(c *gin.Context) {
 	projects := make([]Project, 0)
 	for rows.Next() {
 		var p Project
-		if err := rows.Scan(&p.ID, &p.TenantID, &p.Name, &p.Status, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.TenantID, &p.Name, &p.Status, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
 			return
 		}
@@ -112,13 +148,20 @@ func (s *Service) CreateProject(c *gin.Context) {
 	if req.Status == "" {
 		req.Status = "active"
 	}
+	startDate, err := time.Parse("2006-01-02", req.StartDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "start_date must be YYYY-MM-DD"})
+		return
+	}
+	dueDate := startDate.AddDate(0, 0, req.DurationDays-1)
 
 	var p Project
-	err := s.DB.QueryRow(c.Request.Context(), `
-		INSERT INTO projects (tenant_id, name, status)
-		VALUES ($1, $2, $3)
-		RETURNING id, tenant_id, name, status, created_at
-	`, tenantID, req.Name, req.Status).Scan(&p.ID, &p.TenantID, &p.Name, &p.Status, &p.CreatedAt)
+	err = s.DB.QueryRow(c.Request.Context(), `
+		INSERT INTO projects (tenant_id, name, status, start_date, due_date, duration_days, team_size)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, tenant_id, name, status, start_date, due_date, duration_days, team_size, created_at
+	`, tenantID, req.Name, req.Status, startDate, dueDate, req.DurationDays, req.TeamSize).
+		Scan(&p.ID, &p.TenantID, &p.Name, &p.Status, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "insert failed"})
 		return
