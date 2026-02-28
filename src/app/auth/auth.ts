@@ -4,6 +4,7 @@ export type AuthUser = {
   email: string;
   tenantSlug: string;
   tenantName?: string;
+  tenantLogoUrl?: string;
   role: "system_admin" | "org_admin";
 };
 
@@ -18,6 +19,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
 type RegisterInput = {
   tenantSlug: string;
   tenantName: string;
+  tenantLogoUrl?: string;
   name: string;
   email: string;
   password: string;
@@ -55,6 +57,7 @@ export type TaskItem = {
 export type SystemOrganization = {
   tenant_slug: string;
   tenant_name: string;
+  logo_url: string;
   user_count: number;
   project_count: number;
   task_count: number;
@@ -89,6 +92,7 @@ export type SystemTenant = {
   id: number;
   slug: string;
   name: string;
+  logo_url: string;
   created_at: string;
 };
 
@@ -138,6 +142,7 @@ function userFromToken(token: string): AuthUser {
   const email = String(claims.email || "");
   const tenantSlug = String(claims.tenant_id || "");
   const tenantName = String(claims.tenant_name || "");
+  const tenantLogoUrl = String(claims.tenant_logo || "");
   const id = String(claims.sub || "");
   const role = String(claims.role || "org_admin") as "system_admin" | "org_admin";
   const nameFromEmail = email.includes("@") ? email.split("@")[0] : "User";
@@ -146,6 +151,7 @@ function userFromToken(token: string): AuthUser {
     email,
     tenantSlug,
     tenantName,
+    tenantLogoUrl,
     role,
     name: nameFromEmail,
   };
@@ -190,6 +196,7 @@ export async function registerUser(input: RegisterInput): Promise<{ ok: true; us
       body: JSON.stringify({
         tenant_slug: input.tenantSlug,
         tenant_name: input.tenantName,
+        tenant_logo_url: input.tenantLogoUrl || "",
         name: input.name,
         email: input.email,
         password: input.password,
@@ -202,6 +209,7 @@ export async function registerUser(input: RegisterInput): Promise<{ ok: true; us
       email: payload.user.email,
       tenantSlug: payload.user.tenant_slug,
       tenantName: input.tenantName,
+      tenantLogoUrl: input.tenantLogoUrl || "",
       role: (payload.user as { role?: "system_admin" | "org_admin" }).role || "org_admin",
     };
     writeSession({ token: payload.token, user });
@@ -215,7 +223,7 @@ export async function loginUser(input: LoginInput): Promise<{ ok: true; user: Au
   try {
     const payload = await requestJSON<{
       token: string;
-      user?: { name?: string; tenant_name?: string; role?: "system_admin" | "org_admin" };
+      user?: { name?: string; tenant_name?: string; tenant_logo?: string; role?: "system_admin" | "org_admin" };
     }>("/api/v1/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -229,6 +237,7 @@ export async function loginUser(input: LoginInput): Promise<{ ok: true; user: Au
     const user = userFromToken(payload.token);
     if (payload.user?.name) user.name = payload.user.name;
     if (payload.user?.tenant_name) user.tenantName = payload.user.tenant_name;
+    if (payload.user?.tenant_logo) user.tenantLogoUrl = payload.user.tenant_logo;
     if (payload.user?.role) user.role = payload.user.role;
     writeSession({ token: payload.token, user });
     return { ok: true, user };
@@ -338,7 +347,7 @@ export async function getSystemTenants(): Promise<SystemTenant[]> {
   return payload.items || [];
 }
 
-export async function createSystemTenant(input: { slug: string; name: string }): Promise<SystemTenant> {
+export async function createSystemTenant(input: { slug: string; name: string; logo_url?: string }): Promise<SystemTenant> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
   return requestJSON<SystemTenant>("/api/v1/system/tenants", {
@@ -347,11 +356,11 @@ export async function createSystemTenant(input: { slug: string; name: string }):
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ ...input, logo_url: input.logo_url || "" }),
   });
 }
 
-export async function updateSystemTenant(input: { id: number; slug: string; name: string }): Promise<SystemTenant> {
+export async function updateSystemTenant(input: { id: number; slug: string; name: string; logo_url?: string }): Promise<SystemTenant> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
   return requestJSON<SystemTenant>(`/api/v1/system/tenants/${input.id}`, {
@@ -360,7 +369,7 @@ export async function updateSystemTenant(input: { id: number; slug: string; name
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ slug: input.slug, name: input.name }),
+    body: JSON.stringify({ slug: input.slug, name: input.name, logo_url: input.logo_url || "" }),
   });
 }
 

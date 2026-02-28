@@ -11,6 +11,7 @@ export default function SystemConfigurationPage() {
   const [editing, setEditing] = useState<SystemTenant | null>(null);
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
 
   async function loadTenants() {
     setError("");
@@ -30,10 +31,11 @@ export default function SystemConfigurationPage() {
     event.preventDefault();
     setStatus("Saving...");
     try {
-      const created = await createSystemTenant({ slug: slug.trim().toLowerCase(), name: name.trim() });
+      const created = await createSystemTenant({ slug: slug.trim().toLowerCase(), name: name.trim(), logo_url: logoUrl.trim() });
       setItems((prev) => [created, ...prev]);
       setSlug("");
       setName("");
+      setLogoUrl("");
       setShowCreate(false);
       setStatus("Tenant created.");
     } catch (err) {
@@ -50,11 +52,13 @@ export default function SystemConfigurationPage() {
         id: editing.id,
         slug: slug.trim().toLowerCase(),
         name: name.trim(),
+        logo_url: logoUrl.trim(),
       });
       setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
       setEditing(null);
       setSlug("");
       setName("");
+      setLogoUrl("");
       setStatus("Tenant updated.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to update tenant.");
@@ -88,6 +92,7 @@ export default function SystemConfigurationPage() {
                 setEditing(null);
                 setSlug("");
                 setName("");
+                setLogoUrl("");
                 setShowCreate(true);
               }}
               className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
@@ -98,12 +103,13 @@ export default function SystemConfigurationPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[860px] text-left text-sm">
             <thead className="text-slate-500">
               <tr className="border-b border-slate-200">
                 <th className="px-2 py-2 font-medium">Tenant ID</th>
                 <th className="px-2 py-2 font-medium">Org ID (Slug)</th>
                 <th className="px-2 py-2 font-medium">Organization Name</th>
+                <th className="px-2 py-2 font-medium">Logo</th>
                 <th className="px-2 py-2 font-medium">Created</th>
                 <th className="px-2 py-2 font-medium">Actions</th>
               </tr>
@@ -114,6 +120,9 @@ export default function SystemConfigurationPage() {
                   <td className="px-2 py-3 text-slate-700">{item.id}</td>
                   <td className="px-2 py-3 font-mono text-xs text-slate-800">{item.slug}</td>
                   <td className="px-2 py-3 text-slate-700">{item.name}</td>
+                  <td className="px-2 py-3 text-slate-700">
+                    {item.logo_url ? <img src={item.logo_url} alt={`${item.name} logo`} className="h-8 w-8 rounded-md object-cover" /> : "-"}
+                  </td>
                   <td className="px-2 py-3 text-slate-700">{new Date(item.created_at).toLocaleString()}</td>
                   <td className="px-2 py-3">
                     <button
@@ -122,6 +131,7 @@ export default function SystemConfigurationPage() {
                         setEditing(item);
                         setSlug(item.slug);
                         setName(item.name);
+                        setLogoUrl(item.logo_url || "");
                       }}
                       className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
                     >
@@ -164,6 +174,22 @@ export default function SystemConfigurationPage() {
                   required
                 />
               </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Logo URL</label>
+                <input
+                  type="url"
+                  value={logoUrl}
+                  onChange={(event) => setLogoUrl(event.target.value)}
+                  placeholder="https://..."
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                />
+              </div>
+              {logoUrl.trim() ? (
+                <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                  <img src={logoUrl} alt="Logo preview" className="h-10 w-10 rounded-md object-cover" />
+                  <p className="text-xs text-slate-600">Logo preview</p>
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
@@ -172,6 +198,7 @@ export default function SystemConfigurationPage() {
                 onClick={() => {
                   setShowCreate(false);
                   setEditing(null);
+                  setLogoUrl("");
                 }}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
               >

@@ -3,6 +3,7 @@ package routes
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,12 +11,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type registerRequest struct {
 	TenantSlug string `json:"tenant_slug" binding:"required"`
 	TenantName string `json:"tenant_name" binding:"required"`
+	TenantLogoData string `json:"tenant_logo_data"`
+	TenantLogoURL  string `json:"tenant_logo_url"`
 	Name       string `json:"name" binding:"required"`
 	Email      string `json:"email" binding:"required,email"`
 	Password   string `json:"password" binding:"required,min=6"`
@@ -43,7 +47,55 @@ func (s *Service) Register(c *gin.Context) {
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	req.Name = strings.TrimSpace(req.Name)
 	req.TenantName = strings.TrimSpace(req.TenantName)
-	role := s.roleForEmail(req.Email)
+	req.TenantLogoData = strings.TrimSpace(req.TenantLogoData)
+	req.TenantLogoURL = strings.TrimSpace(req.TenantLogoURL)
+	tenantLogo := req.TenantLogoData
+	if tenantLogo == "" {
+		tenantLogo = req.TenantLogoURL
+	}
+	if tenantLogo != "" {
+		if !strings.HasPrefix(tenantLogo, "data:image/") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid logo upload format"})
+			return
+		}
+		if len(tenantLogo) > 2_800_000 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "logo image too large"})
+			return
+		}
+	}
+	if _, isSystemAdminEmail := s.SystemAdminEmails[req.Email]; isSystemAdminEmail {
+		c.JSON(http.StatusForbidden, gin.H{"error": "system admin accounts cannot be created from signup; use login"})
+		return
+	}
+	role := "org_admin"
+
+	var existingTenantSlug string
+	if err := s.DB.QueryRow(c.Request.Context(), `
+		SELECT slug
+		FROM tenants
+		WHERE lower(name) = lower($1)
+		LIMIT 1
+	`, req.TenantName).Scan(&existingTenantSlug); err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "organization name already exists"})
+		return
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "organization lookup failed"})
+		return
+	}
+
+	var existingUserID int64
+	if err := s.DB.QueryRow(c.Request.Context(), `
+		SELECT id
+		FROM users
+		WHERE lower(email) = lower($1)
+		LIMIT 1
+	`, req.Email).Scan(&existingUserID); err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "email already exists"})
+		return
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "email lookup failed"})
+		return
+	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -60,13 +112,12 @@ func (s *Service) Register(c *gin.Context) {
 
 	var tenantID int64
 	err = tx.QueryRow(c.Request.Context(), `
-		INSERT INTO tenants (slug, name)
-		VALUES ($1, $2)
-		ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+		INSERT INTO tenants (slug, name, logo_url)
+		VALUES ($1, $2, $3)
 		RETURNING id
-	`, req.TenantSlug, req.TenantName).Scan(&tenantID)
+	`, req.TenantSlug, req.TenantName, tenantLogo).Scan(&tenantID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "tenant creation failed"})
+		c.JSON(http.StatusConflict, gin.H{"error": "organization slug already exists"})
 		return
 	}
 
@@ -86,7 +137,7 @@ func (s *Service) Register(c *gin.Context) {
 		return
 	}
 
-	token, err := s.issueToken(userID, req.TenantSlug, req.Email, req.Name, req.TenantName, role)
+	token, err := s.issueToken(userID, req.TenantSlug, req.Email, req.Name, req.TenantName, tenantLogo, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 		return
@@ -100,6 +151,7 @@ func (s *Service) Register(c *gin.Context) {
 			"email":       req.Email,
 			"tenant_slug": req.TenantSlug,
 			"tenant_name": req.TenantName,
+			"tenant_logo": tenantLogo,
 			"role":        role,
 		},
 	})
@@ -126,12 +178,13 @@ func (s *Service) Login(c *gin.Context) {
 	var role string
 	var name string
 	var tenantName string
+	var tenantLogo string
 	err := s.DB.QueryRow(c.Request.Context(), `
-		SELECT u.id, u.password_hash, u.role, u.name, t.name
+		SELECT u.id, u.password_hash, u.role, u.name, t.name, t.logo_url
 		FROM users u
 		JOIN tenants t ON t.id = u.tenant_id
 		WHERE t.slug = $1 AND u.email = $2
-	`, req.TenantSlug, req.Email).Scan(&userID, &hash, &role, &name, &tenantName)
+	`, req.TenantSlug, req.Email).Scan(&userID, &hash, &role, &name, &tenantName, &tenantLogo)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
@@ -142,14 +195,9 @@ func (s *Service) Login(c *gin.Context) {
 		return
 	}
 
-	desiredRole := s.roleForEmail(req.Email)
-	if role != desiredRole {
-		_, _ = s.DB.Exec(c.Request.Context(), `UPDATE users SET role = $1 WHERE id = $2`, desiredRole, userID)
-		role = desiredRole
-	}
 	_, _ = s.DB.Exec(c.Request.Context(), `UPDATE users SET last_login_at = NOW() WHERE id = $1`, userID)
 
-	token, err := s.issueToken(userID, req.TenantSlug, req.Email, name, tenantName, role)
+	token, err := s.issueToken(userID, req.TenantSlug, req.Email, name, tenantName, tenantLogo, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 		return
@@ -163,6 +211,7 @@ func (s *Service) Login(c *gin.Context) {
 			"email":       req.Email,
 			"tenant_slug": req.TenantSlug,
 			"tenant_name": tenantName,
+			"tenant_logo": tenantLogo,
 			"role":        role,
 		},
 	})
@@ -250,12 +299,13 @@ func generateTemporaryPassword(length int) (string, error) {
 	return string(out), nil
 }
 
-func (s *Service) issueToken(userID int64, tenantSlug, email, name, tenantName, role string) (string, error) {
+func (s *Service) issueToken(userID int64, tenantSlug, email, name, tenantName, tenantLogo, role string) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"sub":         fmt.Sprintf("%d", userID),
 		"tenant_id":   tenantSlug,
 		"tenant_name": tenantName,
+		"tenant_logo": tenantLogo,
 		"email":       email,
 		"name":        name,
 		"role":        role,

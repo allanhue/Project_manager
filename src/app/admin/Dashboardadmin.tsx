@@ -139,6 +139,7 @@ export default function DashboardadminPage() {
               <tr className="border-b border-slate-200">
                 <th className="px-2 py-2 font-medium">Tenant</th>
                 <th className="px-2 py-2 font-medium">Name</th>
+                <th className="px-2 py-2 font-medium">Logo</th>
                 <th className="px-2 py-2 font-medium">Users</th>
                 <th className="px-2 py-2 font-medium">Active Users (7d)</th>
                 <th className="px-2 py-2 font-medium">Projects</th>
@@ -152,6 +153,9 @@ export default function DashboardadminPage() {
                 <tr key={org.tenant_slug} className="border-b border-slate-100">
                   <td className="px-2 py-3 font-medium text-slate-900">{org.tenant_slug}</td>
                   <td className="px-2 py-3 text-slate-700">{org.tenant_name}</td>
+                  <td className="px-2 py-3 text-slate-700">
+                    {org.logo_url ? <img src={org.logo_url} alt={`${org.tenant_name} logo`} className="h-8 w-8 rounded-md object-cover" /> : "-"}
+                  </td>
                   <td className="px-2 py-3 text-slate-700">{org.user_count}</td>
                   <td className="px-2 py-3 text-slate-700">{org.active_users_7d}</td>
                   <td className="px-2 py-3 text-slate-700">{org.project_count}</td>

@@ -1,35 +1,40 @@
 package routes
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
 type organizationSummary struct {
-	TenantSlug        string  `json:"tenant_slug"`
-	TenantName        string  `json:"tenant_name"`
-	UserCount         int64   `json:"user_count"`
-	ProjectCount      int64   `json:"project_count"`
-	TaskCount         int64   `json:"task_count"`
-	ActiveUsers7d     int64   `json:"active_users_7d"`
+	TenantSlug        string     `json:"tenant_slug"`
+	TenantName        string     `json:"tenant_name"`
+	LogoURL           string     `json:"logo_url"`
+	UserCount         int64      `json:"user_count"`
+	ProjectCount      int64      `json:"project_count"`
+	TaskCount         int64      `json:"task_count"`
+	ActiveUsers7d     int64      `json:"active_users_7d"`
 	LastLoginAt       *time.Time `json:"last_login_at,omitempty"`
-	ActiveWorkspace7d bool    `json:"active_workspace_7d"`
+	ActiveWorkspace7d bool       `json:"active_workspace_7d"`
 }
 
 type systemTenant struct {
 	ID        int64     `json:"id"`
 	Slug      string    `json:"slug"`
 	Name      string    `json:"name"`
+	LogoURL   string    `json:"logo_url"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 type tenantUpsertRequest struct {
-	Slug string `json:"slug" binding:"required"`
-	Name string `json:"name" binding:"required"`
+	Slug    string `json:"slug" binding:"required"`
+	Name    string `json:"name" binding:"required"`
+	LogoURL string `json:"logo_url"`
 }
 
 func (s *Service) SystemOrganizations(c *gin.Context) {
@@ -37,6 +42,7 @@ func (s *Service) SystemOrganizations(c *gin.Context) {
 		SELECT
 			t.slug,
 			t.name,
+			COALESCE(t.logo_url, '') AS logo_url,
 			COUNT(DISTINCT u.id) AS user_count,
 			COUNT(DISTINCT p.id) AS project_count,
 			COUNT(DISTINCT tk.id) AS task_count,
@@ -66,6 +72,7 @@ func (s *Service) SystemOrganizations(c *gin.Context) {
 		if err := rows.Scan(
 			&row.TenantSlug,
 			&row.TenantName,
+			&row.LogoURL,
 			&row.UserCount,
 			&row.ProjectCount,
 			&row.TaskCount,
@@ -84,7 +91,7 @@ func (s *Service) SystemOrganizations(c *gin.Context) {
 
 func (s *Service) SystemTenants(c *gin.Context) {
 	rows, err := s.DB.Query(c.Request.Context(), `
-		SELECT id, slug, name, created_at
+		SELECT id, slug, name, COALESCE(logo_url, ''), created_at
 		FROM tenants
 		ORDER BY created_at DESC
 	`)
@@ -97,7 +104,7 @@ func (s *Service) SystemTenants(c *gin.Context) {
 	items := make([]systemTenant, 0)
 	for rows.Next() {
 		var item systemTenant
-		if err := rows.Scan(&item.ID, &item.Slug, &item.Name, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.CreatedAt); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
 			return
 		}
@@ -115,13 +122,27 @@ func (s *Service) CreateTenant(c *gin.Context) {
 	}
 	req.Slug = strings.ToLower(strings.TrimSpace(req.Slug))
 	req.Name = strings.TrimSpace(req.Name)
+	req.LogoURL = strings.TrimSpace(req.LogoURL)
+	var existingID int64
+	if err := s.DB.QueryRow(c.Request.Context(), `
+		SELECT id
+		FROM tenants
+		WHERE lower(name) = lower($1)
+		LIMIT 1
+	`, req.Name).Scan(&existingID); err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "tenant create failed (name already exists)"})
+		return
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "tenant lookup failed"})
+		return
+	}
 
 	var item systemTenant
 	err := s.DB.QueryRow(c.Request.Context(), `
-		INSERT INTO tenants (slug, name)
-		VALUES ($1, $2)
-		RETURNING id, slug, name, created_at
-	`, req.Slug, req.Name).Scan(&item.ID, &item.Slug, &item.Name, &item.CreatedAt)
+		INSERT INTO tenants (slug, name, logo_url)
+		VALUES ($1, $2, $3)
+		RETURNING id, slug, name, COALESCE(logo_url, ''), created_at
+	`, req.Slug, req.Name, req.LogoURL).Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "tenant create failed (slug may already exist)"})
 		return
@@ -144,6 +165,20 @@ func (s *Service) UpdateTenant(c *gin.Context) {
 	}
 	req.Slug = strings.ToLower(strings.TrimSpace(req.Slug))
 	req.Name = strings.TrimSpace(req.Name)
+	req.LogoURL = strings.TrimSpace(req.LogoURL)
+	var existingID int64
+	if err := s.DB.QueryRow(c.Request.Context(), `
+		SELECT id
+		FROM tenants
+		WHERE lower(name) = lower($1) AND id <> $2
+		LIMIT 1
+	`, req.Name, id).Scan(&existingID); err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "tenant update failed (name already exists)"})
+		return
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "tenant lookup failed"})
+		return
+	}
 
 	var oldSlug string
 	if err := s.DB.QueryRow(c.Request.Context(), `SELECT slug FROM tenants WHERE id = $1`, id).Scan(&oldSlug); err != nil {
@@ -161,10 +196,10 @@ func (s *Service) UpdateTenant(c *gin.Context) {
 	var item systemTenant
 	err = tx.QueryRow(c.Request.Context(), `
 		UPDATE tenants
-		SET slug = $1, name = $2
-		WHERE id = $3
-		RETURNING id, slug, name, created_at
-	`, req.Slug, req.Name, id).Scan(&item.ID, &item.Slug, &item.Name, &item.CreatedAt)
+		SET slug = $1, name = $2, logo_url = $3
+		WHERE id = $4
+		RETURNING id, slug, name, COALESCE(logo_url, ''), created_at
+	`, req.Slug, req.Name, req.LogoURL, id).Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "tenant update failed (slug may already exist)"})
 		return

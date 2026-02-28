@@ -27,8 +27,10 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			id BIGSERIAL PRIMARY KEY,
 			slug TEXT NOT NULL UNIQUE,
 			name TEXT NOT NULL,
+			logo_url TEXT NOT NULL DEFAULT '',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
+		ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT NOT NULL DEFAULT '';
 
 		CREATE TABLE IF NOT EXISTS users (
 			id BIGSERIAL PRIMARY KEY,
