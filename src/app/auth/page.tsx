@@ -11,7 +11,7 @@ export default function AuthPage() {
   const [mode, setMode] = useState<Mode>("login");
   const [tenantSlug, setTenantSlug] = useState("");
   const [tenantName, setTenantName] = useState("");
-  const [tenantLogoUrl, setTenantLogoUrl] = useState("");
+  const [tenantLogoData, setTenantLogoData] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,8 +33,8 @@ export default function AuthPage() {
 
     const result =
       mode === "login"
-        ? await loginUser({ tenantSlug, email, password })
-        : await registerUser({ tenantSlug, tenantName, tenantLogoUrl, name, email, password });
+        ? await loginUser({ email, password })
+        : await registerUser({ tenantSlug, tenantName, tenantLogoData, name, email, password });
 
     setLoading(false);
     if (!result.ok) {
@@ -47,19 +47,43 @@ export default function AuthPage() {
   async function onForgotPassword() {
     setError("");
     setForgotMessage("");
-    if (!tenantSlug.trim() || !email.trim()) {
-      setError("Enter tenant slug and email first.");
+    if (!email.trim()) {
+      setError("Enter email first.");
       return;
     }
 
     setForgotLoading(true);
-    const result = await forgotPassword({ tenantSlug, email });
+    const result = await forgotPassword({ email, tenantSlug: tenantSlug || "" });
     setForgotLoading(false);
     if (!result.ok) {
       setError(result.message);
       return;
     }
     setForgotMessage(result.message);
+  }
+
+  async function onPickLogo(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Logo must be an image file.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Logo file is too large. Max size is 2MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result.startsWith("data:image/")) {
+        setError("Failed to read logo image.");
+        return;
+      }
+      setTenantLogoData(result);
+      setError("");
+    };
+    reader.onerror = () => setError("Failed to load logo image.");
+    reader.readAsDataURL(file);
   }
 
   return (
@@ -103,23 +127,23 @@ export default function AuthPage() {
               </button>
             </div>
 
-            {/* <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
             <p className="mt-1 text-sm text-slate-600">
               {mode === "login" ? "Enter your organization slug and account credentials." : "Use a unique organization name and a unique email."}
-            </p> */}
-
-            {/* <label className="mt-5 block text-sm font-medium text-slate-700">Organization Slug</label>
-            <input
-              type="text"
-              value={tenantSlug}
-              onChange={(event) => setTenantSlug(event.target.value)}
-              required
-              placeholder="acme"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
-            /> */}
+            </p>
 
             {mode === "register" ? (
               <>
+                <label className="mt-5 block text-sm font-medium text-slate-700">Organization Slug</label>
+                <input
+                  type="text"
+                  value={tenantSlug}
+                  onChange={(event) => setTenantSlug(event.target.value)}
+                  required
+                  placeholder="acme"
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
+                />
+
                 <label className="mt-4 block text-sm font-medium text-slate-700">Organization Name</label>
                 <input
                   type="text"
@@ -130,18 +154,24 @@ export default function AuthPage() {
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
                 />
 
-                <label className="mt-4 block text-sm font-medium text-slate-700">Organization Logo URL</label>
+                <label className="mt-4 block text-sm font-medium text-slate-700">Organization Logo Upload</label>
                 <input
-                  type="url"
-                  value={tenantLogoUrl}
-                  onChange={(event) => setTenantLogoUrl(event.target.value)}
-                  placeholder="https://..."
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => void onPickLogo(event.target.files?.[0] || null)}
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
                 />
-                {tenantLogoUrl.trim() ? (
+                {tenantLogoData.trim() ? (
                   <div className="mt-2 flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2">
-                    <img src={tenantLogoUrl} alt="Organization logo preview" className="h-10 w-10 rounded-md object-cover" />
+                    <img src={tenantLogoData} alt="Organization logo preview" className="h-10 w-10 rounded-md object-cover" />
                     <p className="text-xs text-slate-600">Logo preview</p>
+                    <button
+                      type="button"
+                      onClick={() => setTenantLogoData("")}
+                      className="ml-auto rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                    >
+                      Remove
+                    </button>
                   </div>
                 ) : null}
 

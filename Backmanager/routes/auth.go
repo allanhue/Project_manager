@@ -16,23 +16,23 @@ import (
 )
 
 type registerRequest struct {
-	TenantSlug string `json:"tenant_slug" binding:"required"`
-	TenantName string `json:"tenant_name" binding:"required"`
+	TenantSlug     string `json:"tenant_slug" binding:"required"`
+	TenantName     string `json:"tenant_name" binding:"required"`
 	TenantLogoData string `json:"tenant_logo_data"`
 	TenantLogoURL  string `json:"tenant_logo_url"`
-	Name       string `json:"name" binding:"required"`
-	Email      string `json:"email" binding:"required,email"`
-	Password   string `json:"password" binding:"required,min=6"`
+	Name           string `json:"name" binding:"required"`
+	Email          string `json:"email" binding:"required,email"`
+	Password       string `json:"password" binding:"required,min=6"`
 }
 
 type loginRequest struct {
-	TenantSlug string `json:"tenant_slug" binding:"required"`
+	TenantSlug string `json:"tenant_slug"`
 	Email      string `json:"email" binding:"required,email"`
 	Password   string `json:"password" binding:"required"`
 }
 
 type forgotPasswordRequest struct {
-	TenantSlug string `json:"tenant_slug" binding:"required"`
+	TenantSlug string `json:"tenant_slug"`
 	Email      string `json:"email" binding:"required,email"`
 }
 
@@ -54,7 +54,9 @@ func (s *Service) Register(c *gin.Context) {
 		tenantLogo = req.TenantLogoURL
 	}
 	if tenantLogo != "" {
-		if !strings.HasPrefix(tenantLogo, "data:image/") {
+		isUpload := strings.HasPrefix(tenantLogo, "data:image/")
+		isLegacyURL := strings.HasPrefix(tenantLogo, "http://") || strings.HasPrefix(tenantLogo, "https://")
+		if !isUpload && !isLegacyURL {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid logo upload format"})
 			return
 		}
@@ -177,14 +179,27 @@ func (s *Service) Login(c *gin.Context) {
 	var hash string
 	var role string
 	var name string
+	var tenantSlug string
 	var tenantName string
 	var tenantLogo string
-	err := s.DB.QueryRow(c.Request.Context(), `
-		SELECT u.id, u.password_hash, u.role, u.name, t.name, t.logo_url
-		FROM users u
-		JOIN tenants t ON t.id = u.tenant_id
-		WHERE t.slug = $1 AND u.email = $2
-	`, req.TenantSlug, req.Email).Scan(&userID, &hash, &role, &name, &tenantName, &tenantLogo)
+	var err error
+	if req.TenantSlug != "" {
+		err = s.DB.QueryRow(c.Request.Context(), `
+			SELECT u.id, u.password_hash, u.role, u.name, t.slug, t.name, t.logo_url
+			FROM users u
+			JOIN tenants t ON t.id = u.tenant_id
+			WHERE t.slug = $1 AND lower(u.email) = lower($2)
+		`, req.TenantSlug, req.Email).Scan(&userID, &hash, &role, &name, &tenantSlug, &tenantName, &tenantLogo)
+	} else {
+		err = s.DB.QueryRow(c.Request.Context(), `
+			SELECT u.id, u.password_hash, u.role, u.name, t.slug, t.name, t.logo_url
+			FROM users u
+			JOIN tenants t ON t.id = u.tenant_id
+			WHERE lower(u.email) = lower($1)
+			ORDER BY u.id DESC
+			LIMIT 1
+		`, req.Email).Scan(&userID, &hash, &role, &name, &tenantSlug, &tenantName, &tenantLogo)
+	}
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
@@ -197,7 +212,7 @@ func (s *Service) Login(c *gin.Context) {
 
 	_, _ = s.DB.Exec(c.Request.Context(), `UPDATE users SET last_login_at = NOW() WHERE id = $1`, userID)
 
-	token, err := s.issueToken(userID, req.TenantSlug, req.Email, name, tenantName, tenantLogo, role)
+	token, err := s.issueToken(userID, tenantSlug, req.Email, name, tenantName, tenantLogo, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 		return
@@ -209,7 +224,7 @@ func (s *Service) Login(c *gin.Context) {
 			"id":          userID,
 			"name":        name,
 			"email":       req.Email,
-			"tenant_slug": req.TenantSlug,
+			"tenant_slug": tenantSlug,
 			"tenant_name": tenantName,
 			"tenant_logo": tenantLogo,
 			"role":        role,
@@ -237,12 +252,23 @@ func (s *Service) ForgotPassword(c *gin.Context) {
 	var userID int64
 	var name string
 	var tenantName string
-	err = tx.QueryRow(c.Request.Context(), `
-		SELECT u.id, u.name, t.name
-		FROM users u
-		JOIN tenants t ON t.id = u.tenant_id
-		WHERE t.slug = $1 AND lower(u.email) = lower($2)
-	`, req.TenantSlug, req.Email).Scan(&userID, &name, &tenantName)
+	if req.TenantSlug != "" {
+		err = tx.QueryRow(c.Request.Context(), `
+			SELECT u.id, u.name, t.name
+			FROM users u
+			JOIN tenants t ON t.id = u.tenant_id
+			WHERE t.slug = $1 AND lower(u.email) = lower($2)
+		`, req.TenantSlug, req.Email).Scan(&userID, &name, &tenantName)
+	} else {
+		err = tx.QueryRow(c.Request.Context(), `
+			SELECT u.id, u.name, t.name
+			FROM users u
+			JOIN tenants t ON t.id = u.tenant_id
+			WHERE lower(u.email) = lower($1)
+			ORDER BY u.id DESC
+			LIMIT 1
+		`, req.Email).Scan(&userID, &name, &tenantName)
+	}
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"status": "if the account exists, a reset email has been sent"})
 		return

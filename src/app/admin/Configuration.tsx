@@ -11,7 +11,7 @@ export default function SystemConfigurationPage() {
   const [editing, setEditing] = useState<SystemTenant | null>(null);
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
+  const [logoData, setLogoData] = useState("");
 
   async function loadTenants() {
     setError("");
@@ -31,11 +31,11 @@ export default function SystemConfigurationPage() {
     event.preventDefault();
     setStatus("Saving...");
     try {
-      const created = await createSystemTenant({ slug: slug.trim().toLowerCase(), name: name.trim(), logo_url: logoUrl.trim() });
+      const created = await createSystemTenant({ slug: slug.trim().toLowerCase(), name: name.trim(), logo_data: logoData.trim() });
       setItems((prev) => [created, ...prev]);
       setSlug("");
       setName("");
-      setLogoUrl("");
+      setLogoData("");
       setShowCreate(false);
       setStatus("Tenant created.");
     } catch (err) {
@@ -52,17 +52,41 @@ export default function SystemConfigurationPage() {
         id: editing.id,
         slug: slug.trim().toLowerCase(),
         name: name.trim(),
-        logo_url: logoUrl.trim(),
+        logo_data: logoData.trim(),
       });
       setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
       setEditing(null);
       setSlug("");
       setName("");
-      setLogoUrl("");
+      setLogoData("");
       setStatus("Tenant updated.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to update tenant.");
     }
+  }
+
+  async function onPickLogo(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setStatus("Logo must be an image file.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setStatus("Logo file is too large. Max size is 2MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result.startsWith("data:image/")) {
+        setStatus("Failed to read logo image.");
+        return;
+      }
+      setLogoData(result);
+      setStatus("");
+    };
+    reader.onerror = () => setStatus("Failed to load logo image.");
+    reader.readAsDataURL(file);
   }
 
   return (
@@ -92,7 +116,7 @@ export default function SystemConfigurationPage() {
                 setEditing(null);
                 setSlug("");
                 setName("");
-                setLogoUrl("");
+                setLogoData("");
                 setShowCreate(true);
               }}
               className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
@@ -131,7 +155,7 @@ export default function SystemConfigurationPage() {
                         setEditing(item);
                         setSlug(item.slug);
                         setName(item.name);
-                        setLogoUrl(item.logo_url || "");
+                        setLogoData(item.logo_url || "");
                       }}
                       className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
                     >
@@ -175,19 +199,25 @@ export default function SystemConfigurationPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Logo URL</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Logo Upload</label>
                 <input
-                  type="url"
-                  value={logoUrl}
-                  onChange={(event) => setLogoUrl(event.target.value)}
-                  placeholder="https://..."
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => void onPickLogo(event.target.files?.[0] || null)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
                 />
               </div>
-              {logoUrl.trim() ? (
+              {logoData.trim() ? (
                 <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2">
-                  <img src={logoUrl} alt="Logo preview" className="h-10 w-10 rounded-md object-cover" />
+                  <img src={logoData} alt="Logo preview" className="h-10 w-10 rounded-md object-cover" />
                   <p className="text-xs text-slate-600">Logo preview</p>
+                  <button
+                    type="button"
+                    onClick={() => setLogoData("")}
+                    className="ml-auto rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                  >
+                    Remove
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -198,7 +228,7 @@ export default function SystemConfigurationPage() {
                 onClick={() => {
                   setShowCreate(false);
                   setEditing(null);
-                  setLogoUrl("");
+                  setLogoData("");
                 }}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
               >

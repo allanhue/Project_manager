@@ -19,20 +19,20 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
 type RegisterInput = {
   tenantSlug: string;
   tenantName: string;
-  tenantLogoUrl?: string;
+  tenantLogoData?: string;
   name: string;
   email: string;
   password: string;
 };
 
 type LoginInput = {
-  tenantSlug: string;
+  tenantSlug?: string;
   email: string;
   password: string;
 };
 
 type ForgotPasswordInput = {
-  tenantSlug: string;
+  tenantSlug?: string;
   email: string;
 };
 
@@ -196,7 +196,7 @@ export async function registerUser(input: RegisterInput): Promise<{ ok: true; us
       body: JSON.stringify({
         tenant_slug: input.tenantSlug,
         tenant_name: input.tenantName,
-        tenant_logo_url: input.tenantLogoUrl || "",
+        tenant_logo_data: input.tenantLogoData || "",
         name: input.name,
         email: input.email,
         password: input.password,
@@ -209,7 +209,7 @@ export async function registerUser(input: RegisterInput): Promise<{ ok: true; us
       email: payload.user.email,
       tenantSlug: payload.user.tenant_slug,
       tenantName: input.tenantName,
-      tenantLogoUrl: input.tenantLogoUrl || "",
+      tenantLogoUrl: input.tenantLogoData || "",
       role: (payload.user as { role?: "system_admin" | "org_admin" }).role || "org_admin",
     };
     writeSession({ token: payload.token, user });
@@ -228,7 +228,7 @@ export async function loginUser(input: LoginInput): Promise<{ ok: true; user: Au
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tenant_slug: input.tenantSlug,
+        tenant_slug: input.tenantSlug || "",
         email: input.email,
         password: input.password,
       }),
@@ -252,7 +252,7 @@ export async function forgotPassword(input: ForgotPasswordInput): Promise<{ ok: 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tenant_slug: input.tenantSlug,
+        tenant_slug: input.tenantSlug || "",
         email: input.email,
       }),
     });
@@ -347,7 +347,7 @@ export async function getSystemTenants(): Promise<SystemTenant[]> {
   return payload.items || [];
 }
 
-export async function createSystemTenant(input: { slug: string; name: string; logo_url?: string }): Promise<SystemTenant> {
+export async function createSystemTenant(input: { slug: string; name: string; logo_data?: string }): Promise<SystemTenant> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
   return requestJSON<SystemTenant>("/api/v1/system/tenants", {
@@ -356,11 +356,11 @@ export async function createSystemTenant(input: { slug: string; name: string; lo
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ ...input, logo_url: input.logo_url || "" }),
+    body: JSON.stringify({ ...input, logo_data: input.logo_data || "" }),
   });
 }
 
-export async function updateSystemTenant(input: { id: number; slug: string; name: string; logo_url?: string }): Promise<SystemTenant> {
+export async function updateSystemTenant(input: { id: number; slug: string; name: string; logo_data?: string }): Promise<SystemTenant> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
   return requestJSON<SystemTenant>(`/api/v1/system/tenants/${input.id}`, {
@@ -369,7 +369,7 @@ export async function updateSystemTenant(input: { id: number; slug: string; name
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ slug: input.slug, name: input.name, logo_url: input.logo_url || "" }),
+    body: JSON.stringify({ slug: input.slug, name: input.name, logo_data: input.logo_data || "" }),
   });
 }
 

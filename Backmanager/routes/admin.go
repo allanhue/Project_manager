@@ -32,9 +32,10 @@ type systemTenant struct {
 }
 
 type tenantUpsertRequest struct {
-	Slug    string `json:"slug" binding:"required"`
-	Name    string `json:"name" binding:"required"`
-	LogoURL string `json:"logo_url"`
+	Slug     string `json:"slug" binding:"required"`
+	Name     string `json:"name" binding:"required"`
+	LogoData string `json:"logo_data"`
+	LogoURL  string `json:"logo_url"`
 }
 
 func (s *Service) SystemOrganizations(c *gin.Context) {
@@ -122,7 +123,24 @@ func (s *Service) CreateTenant(c *gin.Context) {
 	}
 	req.Slug = strings.ToLower(strings.TrimSpace(req.Slug))
 	req.Name = strings.TrimSpace(req.Name)
+	req.LogoData = strings.TrimSpace(req.LogoData)
 	req.LogoURL = strings.TrimSpace(req.LogoURL)
+	logoValue := req.LogoData
+	if logoValue == "" {
+		logoValue = req.LogoURL
+	}
+	if logoValue != "" {
+		isUpload := strings.HasPrefix(logoValue, "data:image/")
+		isLegacyURL := strings.HasPrefix(logoValue, "http://") || strings.HasPrefix(logoValue, "https://")
+		if !isUpload && !isLegacyURL {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid logo upload format"})
+			return
+		}
+		if len(logoValue) > 2_800_000 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "logo image too large"})
+			return
+		}
+	}
 	var existingID int64
 	if err := s.DB.QueryRow(c.Request.Context(), `
 		SELECT id
@@ -142,7 +160,7 @@ func (s *Service) CreateTenant(c *gin.Context) {
 		INSERT INTO tenants (slug, name, logo_url)
 		VALUES ($1, $2, $3)
 		RETURNING id, slug, name, COALESCE(logo_url, ''), created_at
-	`, req.Slug, req.Name, req.LogoURL).Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.CreatedAt)
+	`, req.Slug, req.Name, logoValue).Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "tenant create failed (slug may already exist)"})
 		return
@@ -165,7 +183,24 @@ func (s *Service) UpdateTenant(c *gin.Context) {
 	}
 	req.Slug = strings.ToLower(strings.TrimSpace(req.Slug))
 	req.Name = strings.TrimSpace(req.Name)
+	req.LogoData = strings.TrimSpace(req.LogoData)
 	req.LogoURL = strings.TrimSpace(req.LogoURL)
+	logoValue := req.LogoData
+	if logoValue == "" {
+		logoValue = req.LogoURL
+	}
+	if logoValue != "" {
+		isUpload := strings.HasPrefix(logoValue, "data:image/")
+		isLegacyURL := strings.HasPrefix(logoValue, "http://") || strings.HasPrefix(logoValue, "https://")
+		if !isUpload && !isLegacyURL {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid logo upload format"})
+			return
+		}
+		if len(logoValue) > 2_800_000 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "logo image too large"})
+			return
+		}
+	}
 	var existingID int64
 	if err := s.DB.QueryRow(c.Request.Context(), `
 		SELECT id
@@ -199,7 +234,7 @@ func (s *Service) UpdateTenant(c *gin.Context) {
 		SET slug = $1, name = $2, logo_url = $3
 		WHERE id = $4
 		RETURNING id, slug, name, COALESCE(logo_url, ''), created_at
-	`, req.Slug, req.Name, req.LogoURL, id).Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.CreatedAt)
+	`, req.Slug, req.Name, logoValue, id).Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "tenant update failed (slug may already exist)"})
 		return
