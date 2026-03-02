@@ -180,7 +180,7 @@ export default function SettingsPage() {
             placeholder="Subject"
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
           />
-          <select
+          {/* <select
             value={priority}
             onChange={(event) => setPriority(event.target.value)}
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
@@ -188,7 +188,7 @@ export default function SettingsPage() {
             <option value="low">low</option>
             <option value="normal">normal</option>
             <option value="high">high</option>
-          </select>
+          </select> */}
         </div>
         <textarea
           required

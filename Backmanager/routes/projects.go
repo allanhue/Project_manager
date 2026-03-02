@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,6 +25,15 @@ type Project struct {
 }
 
 type createProjectRequest struct {
+	Name         string   `json:"name" binding:"required"`
+	Status       string   `json:"status"`
+	Assignees    []string `json:"assignees"`
+	StartDate    string   `json:"start_date" binding:"required"`
+	DurationDays int      `json:"duration_days" binding:"required,min=1,max=3650"`
+	TeamSize     int      `json:"team_size" binding:"required,min=1,max=10000"`
+}
+
+type updateProjectRequest struct {
 	Name         string   `json:"name" binding:"required"`
 	Status       string   `json:"status"`
 	Assignees    []string `json:"assignees"`
@@ -236,4 +246,57 @@ func (s *Service) CreateProject(c *gin.Context) {
 		"Project created",
 		"Your project '"+p.Name+"' was created successfully.",
 	)
+}
+
+func (s *Service) UpdateProject(c *gin.Context) {
+	tenantID := tenantFromContext(c)
+	projectID, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
+	if err != nil || projectID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
+		return
+	}
+
+	var req updateProjectRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	if strings.TrimSpace(req.Status) == "" {
+		req.Status = "active"
+	}
+	startDate, err := time.Parse("2006-01-02", strings.TrimSpace(req.StartDate))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "start_date must be YYYY-MM-DD"})
+		return
+	}
+	dueDate := startDate.AddDate(0, 0, req.DurationDays-1)
+
+	cleanAssignees := make([]string, 0, len(req.Assignees))
+	for _, assignee := range req.Assignees {
+		v := strings.TrimSpace(assignee)
+		if v != "" {
+			cleanAssignees = append(cleanAssignees, v)
+		}
+	}
+	assigneesJSON, err := json.Marshal(cleanAssignees)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid assignees payload"})
+		return
+	}
+
+	var p Project
+	var assigneesRaw []byte
+	err = s.DB.QueryRow(c.Request.Context(), `
+		UPDATE projects
+		SET name = $1, status = $2, assignees = $3::jsonb, start_date = $4, due_date = $5, duration_days = $6, team_size = $7
+		WHERE id = $8 AND tenant_id = $9
+		RETURNING id, tenant_id, name, status, assignees, start_date, due_date, duration_days, team_size, created_at
+	`, strings.TrimSpace(req.Name), strings.TrimSpace(req.Status), string(assigneesJSON), startDate, dueDate, req.DurationDays, req.TeamSize, projectID, tenantID).
+		Scan(&p.ID, &p.TenantID, &p.Name, &p.Status, &assigneesRaw, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+		return
+	}
+	p.Assignees = cleanAssignees
+	c.JSON(http.StatusOK, p)
 }

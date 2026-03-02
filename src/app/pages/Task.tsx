@@ -6,7 +6,7 @@ import { LoadingSpinner } from "../componets/LoadingSpinner";
 
 function chipClass(status: string) {
   if (status === "done") return "bg-emerald-50 text-emerald-700";
-  if (status === "in_progress") return "bg-sky-50 text-sky-700";
+  if (status === "In progress") return "bg-sky-50 text-sky-700";
   return "bg-slate-100 text-slate-700";
 }
 
@@ -142,9 +142,9 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
                 <select value={status} onChange={(event) => setStatus(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300">
-                  <option value="todo">todo</option>
-                  <option value="in_progress">in_progress</option>
-                  <option value="done">done</option>
+                  <option value="Todo">todo</option>
+                  <option value="In progress">In progress</option>
+                  <option value="Done">done</option>
                 </select>
               </div>
               <div className="md:col-span-2">

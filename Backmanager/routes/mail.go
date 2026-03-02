@@ -56,7 +56,7 @@ func (s *Service) TestNotification(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "sent"})
+	c.JSON(http.StatusOK, gin.H{"message": "sent"})
 }
 
 func (s *Service) SupportRequest(c *gin.Context) {
