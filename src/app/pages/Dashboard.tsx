@@ -17,8 +17,9 @@ import ProjectsPage from "./Projects";
 import { Sidebar } from "./Sidebar";
 import SettingsPage from "./Settings";
 import TasksPage from "./Task";
+import TimesheetsPage from "./Timesheets";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
 
 const stats = [
   { label: "Receivables", value: "KES 1.42M", change: "+9% vs last month" },
@@ -153,6 +154,7 @@ export default function Dashboard() {
 
     if (currentPage === "projects") return <ProjectsPage searchQuery={searchQuery} />;
     if (currentPage === "tasks") return <TasksPage searchQuery={searchQuery} />;
+    if (currentPage === "timesheets") return <TimesheetsPage searchQuery={searchQuery} />;
     if (currentPage === "analytics") return <AnalyticsPage searchQuery={searchQuery} />;
     if (currentPage === "calendar") return <CalendarPage />;
     if (currentPage === "forum") return <ForumPage searchQuery={searchQuery} />;

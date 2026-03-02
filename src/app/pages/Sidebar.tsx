@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
 
 const menu: Array<{ key: PageKey; label: string; icon: ReactNode }> = [
   {
@@ -29,6 +29,16 @@ const menu: Array<{ key: PageKey; label: string; icon: ReactNode }> = [
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M9 11l2 2 4-4" />
         <path d="M4 6h16M4 12h4M4 18h16" />
+      </svg>
+    ),
+  },
+  {
+    key: "timesheets",
+    label: "Timesheets",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M4 5h16v14H4z" />
+        <path d="M8 3v4M16 3v4M4 9h16M8 13h8M8 17h5" />
       </svg>
     ),
   },

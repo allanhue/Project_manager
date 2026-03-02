@@ -45,6 +45,9 @@ func main() {
 	if err := svc.EnsureTasksTable(); err != nil {
 		log.Fatalf("tasks schema init failed: %v", err)
 	}
+	if err := svc.EnsureTimesheetsTable(); err != nil {
+		log.Fatalf("timesheets schema init failed: %v", err)
+	}
 	if err := svc.EnsureSystemAdminRoles(context.Background()); err != nil {
 		log.Fatalf("system-admin role sync failed: %v", err)
 	}
@@ -71,12 +74,16 @@ func main() {
 		api.POST("/projects", svc.CreateProject)
 		api.GET("/tasks", svc.ListTasks)
 		api.POST("/tasks", svc.CreateTask)
+		api.PUT("/tasks/:id", svc.UpdateTask)
 		api.GET("/forum/posts", svc.ListForumPosts)
 		api.POST("/forum/posts", svc.CreateForumPost)
 		api.GET("/issues", svc.ListIssues)
 		api.POST("/issues", svc.CreateIssue)
+		api.GET("/timesheets", svc.ListTimesheets)
+		api.POST("/timesheets", svc.CreateTimesheet)
 		api.POST("/notifications/test", svc.TestNotification)
 		api.POST("/support/request", svc.SupportRequest)
+		api.PUT("/projects/:id", svc.UpdateProject)
 	}
 
 	system := api.Group("/system")

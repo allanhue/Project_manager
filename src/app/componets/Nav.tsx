@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSystemLogs, listProjects, listTasks, Project, sendSupportRequest } from "../auth/auth";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
 
 const titles: Record<PageKey, string> = {
   dashboard: "Dashboard",
   projects: "Projects",
   tasks: "Tasks",
+  timesheets: "Timesheets",
   analytics: "Analytics",
   calendar: "Calendar",
   forum: "Forum",
@@ -133,6 +134,7 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, se
           { key: "dashboard", label: "Dashboard" },
           { key: "projects", label: "Projects" },
           { key: "tasks", label: "Tasks" },
+          { key: "timesheets", label: "Timesheets" },
           { key: "analytics", label: "Analytics" },
           { key: "calendar", label: "Calendar" },
           { key: "forum", label: "Forum" },
@@ -159,9 +161,11 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, se
   const searchPlaceholder =
     currentPage === "projects"
       ? "Search projects, assignees..."
-      : currentPage === "tasks"
-        ? "Search tasks, subtasks..."
-        : currentPage === "calendar"
+        : currentPage === "tasks"
+          ? "Search tasks, subtasks..."
+          : currentPage === "timesheets"
+            ? "Search timesheet notes, projects..."
+          : currentPage === "calendar"
           ? "Search calendar updates..."
           : currentPage === "forum"
             ? "Search forum posts..."
@@ -269,6 +273,18 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, se
           </div>
           <button
             type="button"
+            onClick={() => onNavigate(role === "org_admin" ? "profile" : "settings")}
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border ${isSystemAdmin ? "border-sky-200 bg-sky-50 text-slate-800 hover:bg-sky-100" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+            aria-label="Open profile"
+            title={role === "org_admin" ? "Profile" : "Account settings"}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="12" cy="8" r="3.1" />
+              <path d="M5 20c1.6-3.2 3.9-4.8 7-4.8s5.4 1.6 7 4.8" />
+            </svg>
+          </button>
+          <button
+            type="button"
             onClick={onLogout}
             className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${isSystemAdmin ? "border-sky-200 bg-sky-50 text-slate-800 hover:bg-sky-100" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
           >
@@ -363,8 +379,8 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, se
                 event.preventDefault();
                 setSupportStatus("Sending...");
                 try {
-                  await sendSupportRequest({ subject: supportSubject, priority: supportPriority, message: supportMessage });
-                  setSupportStatus("Support request sent.");
+                  const response = await sendSupportRequest({ subject: supportSubject, priority: supportPriority, message: supportMessage });
+                  setSupportStatus(response.message || response.status || "Support request sent.");
                   setSupportSubject("");
                   setSupportPriority("normal");
                   setSupportMessage("");

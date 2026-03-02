@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { createTask, listProjects, listTasks, Project, TaskItem } from "../auth/auth";
+import { createTask, listProjects, listTasks, Project, TaskItem, updateTask } from "../auth/auth";
 import { LoadingSpinner } from "../componets/LoadingSpinner";
 
 function chipClass(status: string) {
@@ -25,6 +25,7 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
   const [status, setStatus] = useState("todo");
   const [priority, setPriority] = useState("medium");
   const [subtasksText, setSubtasksText] = useState("");
+  const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -66,6 +67,55 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
     }
   }
 
+  async function onUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingTask || !title.trim() || !projectId) return;
+    setError("");
+    const subtasks = subtasksText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    try {
+      const updated = await updateTask({
+        id: editingTask.id,
+        title: title.trim(),
+        status,
+        priority,
+        project_id: Number(projectId),
+        subtasks,
+      });
+      setTasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      closeForm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update task.");
+    }
+  }
+
+  function openCreate() {
+    setEditingTask(null);
+    setTitle("");
+    setProjectId("");
+    setStatus("todo");
+    setPriority("medium");
+    setSubtasksText("");
+    setShowCreate(true);
+  }
+
+  function openEdit(task: TaskItem) {
+    setEditingTask(task);
+    setTitle(task.title);
+    setProjectId(String(task.project_id));
+    setStatus(task.status || "todo");
+    setPriority(task.priority || "medium");
+    setSubtasksText((task.subtasks || []).join("\n"));
+    setShowCreate(true);
+  }
+
+  function closeForm() {
+    setShowCreate(false);
+    setEditingTask(null);
+  }
+
   const filteredTasks = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return tasks;
@@ -80,7 +130,7 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
             <h2 className="text-lg font-semibold text-slate-900">Task Board</h2>
             <p className="text-sm text-slate-600">Plan daily execution, assign priorities and track delivery outcomes.</p>
           </div>
-          <button type="button" onClick={() => setShowCreate(true)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-[1px]">
+          <button type="button" onClick={openCreate} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-[1px]">
             New Task
           </button>
         </div>
@@ -100,6 +150,7 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
                 <th className="px-2 py-2 font-medium">Priority</th>
                 <th className="px-2 py-2 font-medium">Subtasks</th>
                 <th className="px-2 py-2 font-medium">Created</th>
+                <th className="px-2 py-2 font-medium">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -113,6 +164,11 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
                   <td className="px-2 py-3 text-slate-700">{task.priority}</td>
                   <td className="px-2 py-3 text-slate-700">{task.subtasks?.length || 0}</td>
                   <td className="px-2 py-3 text-slate-700">{new Date(task.created_at).toLocaleString()}</td>
+                  <td className="px-2 py-3">
+                    <button type="button" onClick={() => openEdit(task)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100">
+                      Edit
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -122,10 +178,10 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
 
       {showCreate ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
-          <form onSubmit={onCreate} className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <form onSubmit={editingTask ? onUpdate : onCreate} className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
-              <h3 className="text-lg font-semibold text-slate-900">Create Task</h3>
-              <p className="mt-1 text-sm text-slate-600">Attach work to a project and break execution into subtasks.</p>
+              <h3 className="text-lg font-semibold text-slate-900">{editingTask ? "Edit Task" : "Create Task"}</h3>
+              <p className="mt-1 text-sm text-slate-600">{editingTask ? "Update task details and project linkage." : "Attach work to a project and break execution into subtasks."}</p>
             </div>
             <div className="grid gap-4 p-6 md:grid-cols-2">
               <div>
@@ -142,9 +198,9 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
                 <select value={status} onChange={(event) => setStatus(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300">
-                  <option value="Todo">todo</option>
+                  <option value="todo">todo</option>
                   <option value="In progress">In progress</option>
-                  <option value="Done">done</option>
+                  <option value="done">done</option>
                 </select>
               </div>
               <div className="md:col-span-2">
@@ -165,11 +221,11 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4">
-              <button type="button" onClick={() => setShowCreate(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">
+              <button type="button" onClick={closeForm} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">
                 Cancel
               </button>
               <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-                Add Task
+                {editingTask ? "Save Changes" : "Add Task"}
               </button>
             </div>
           </form>
@@ -178,4 +234,3 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
     </section>
   );
 }
-

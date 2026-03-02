@@ -61,6 +61,27 @@ export type TaskItem = {
   created_at: string;
 };
 
+export type TimesheetEntry = {
+  id: number;
+  tenant_id: string;
+  project_id?: number | null;
+  task_id?: number | null;
+  project_name?: string;
+  task_title?: string;
+  work_date: string;
+  hours: number;
+  billable: boolean;
+  notes: string;
+  created_by_email: string;
+  created_at: string;
+};
+
+export type TimesheetSummary = {
+  billable_hours: number;
+  non_billable_hours: number;
+  total_hours: number;
+};
+
 export type SystemOrganization = {
   tenant_slug: string;
   tenant_name: string;
@@ -338,6 +359,34 @@ export async function createProject(input: {
   });
 }
 
+export async function updateProject(input: {
+  id: number;
+  name: string;
+  status?: string;
+  assignees?: string[];
+  start_date: string;
+  duration_days: number;
+  team_size: number;
+}): Promise<Project> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<Project>(`/api/v1/projects/${input.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      name: input.name,
+      status: input.status,
+      assignees: input.assignees || [],
+      start_date: input.start_date,
+      duration_days: input.duration_days,
+      team_size: input.team_size,
+    }),
+  });
+}
+
 export async function listTasks(): Promise<TaskItem[]> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
@@ -364,6 +413,72 @@ export async function createTask(input: {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(input),
+  });
+}
+
+export async function updateTask(input: {
+  id: number;
+  title: string;
+  status?: string;
+  priority?: string;
+  project_id: number;
+  subtasks?: string[];
+}): Promise<TaskItem> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<TaskItem>(`/api/v1/tasks/${input.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      title: input.title,
+      status: input.status,
+      priority: input.priority,
+      project_id: input.project_id,
+      subtasks: input.subtasks || [],
+    }),
+  });
+}
+
+export async function listTimesheets(): Promise<{ items: TimesheetEntry[]; summary: TimesheetSummary }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: TimesheetEntry[]; summary: TimesheetSummary }>("/api/v1/timesheets", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return {
+    items: payload.items || [],
+    summary: payload.summary || { billable_hours: 0, non_billable_hours: 0, total_hours: 0 },
+  };
+}
+
+export async function createTimesheet(input: {
+  project_id?: number | null;
+  task_id?: number | null;
+  work_date: string;
+  hours: number;
+  billable: boolean;
+  notes?: string;
+}): Promise<TimesheetEntry> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<TimesheetEntry>("/api/v1/timesheets", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      project_id: input.project_id ?? null,
+      task_id: input.task_id ?? null,
+      work_date: input.work_date,
+      hours: input.hours,
+      billable: input.billable,
+      notes: input.notes || "",
+    }),
   });
 }
 
@@ -569,10 +684,10 @@ export async function sendTestNotification(input?: { email?: string; subject?: s
   });
 }
 
-export async function sendSupportRequest(input: { subject: string; message: string; priority?: string }): Promise<{ status: string }> {
+export async function sendSupportRequest(input: { subject: string; message: string; priority?: string }): Promise<{ message?: string; status?: string }> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
-  return requestJSON<{ status: string }>("/api/v1/support/request", {
+  return requestJSON<{ message?: string; status?: string }>("/api/v1/support/request", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

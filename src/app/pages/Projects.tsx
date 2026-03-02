@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { createProject, listProjects, listUsers, Project, TenantUser } from "../auth/auth";
+import { createProject, listProjects, listUsers, Project, TenantUser, updateProject } from "../auth/auth";
 import { LoadingSpinner } from "../componets/LoadingSpinner";
 
 function statusClass(status: string) {
@@ -26,6 +26,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
   const [newDurationDays, setNewDurationDays] = useState(30);
   const [newTeamSize, setNewTeamSize] = useState(3);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   async function loadProjects() {
     setLoading(true);
@@ -71,6 +72,55 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
     }
   }
 
+  function openCreate() {
+    setEditingProject(null);
+    setNewName("");
+    setNewStatus("active");
+    setSelectedAssignees([]);
+    setNewStartDate(new Date().toISOString().slice(0, 10));
+    setNewDurationDays(30);
+    setNewTeamSize(3);
+    setShowCreate(true);
+  }
+
+  function closeForm() {
+    setShowCreate(false);
+    setEditingProject(null);
+  }
+
+  async function onUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingProject || !newName.trim()) return;
+    setError("");
+    try {
+      const updated = await updateProject({
+        id: editingProject.id,
+        name: newName.trim(),
+        status: newStatus,
+        assignees: selectedAssignees,
+        start_date: newStartDate,
+        duration_days: newDurationDays,
+        team_size: newTeamSize,
+      });
+      setProjects((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setEditingProject(null);
+      setShowCreate(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update project.");
+    }
+  }
+
+  function openEdit(project: Project) {
+    setEditingProject(project);
+    setNewName(project.name);
+    setNewStatus(project.status || "active");
+    setSelectedAssignees(project.assignees || []);
+    setNewStartDate(project.start_date ? new Date(project.start_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
+    setNewDurationDays(project.duration_days || 30);
+    setNewTeamSize(project.team_size || 1);
+    setShowCreate(true);
+  }
+
   const filteredProjects = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return projects;
@@ -91,7 +141,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
           <h2 className="text-lg font-semibold text-slate-900">Project Portfolio</h2>
           <button
             type="button"
-            onClick={() => setShowCreate(true)}
+            onClick={openCreate}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-[1px]"
           >
             New Project
@@ -128,6 +178,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                 <th className="px-2 py-2 font-medium">Time Frame</th>
                 <th className="px-2 py-2 font-medium">Team Size</th>
                 <th className="px-2 py-2 font-medium">Created</th>
+                <th className="px-2 py-2 font-medium">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -145,6 +196,11 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                   </td>
                   <td className="px-2 py-3 text-slate-700">{project.team_size}</td>
                   <td className="px-2 py-3 text-slate-700">{new Date(project.created_at).toLocaleString()}</td>
+                  <td className="px-2 py-3">
+                    <button type="button" onClick={() => openEdit(project)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100">
+                      Edit
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -154,10 +210,10 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
 
       {showCreate ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
-          <form onSubmit={onCreate} className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <form onSubmit={editingProject ? onUpdate : onCreate} className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
-              <h3 className="text-lg font-semibold text-slate-900">Create Project</h3>
-              <p className="mt-1 text-sm text-slate-600">Define timeline, ownership, and staffing in one place.</p>
+              <h3 className="text-lg font-semibold text-slate-900">{editingProject ? "Edit Project" : "Create Project"}</h3>
+              <p className="mt-1 text-sm text-slate-600">{editingProject ? "Update timeline, ownership, and staffing details." : "Define timeline, ownership, and staffing in one place."}</p>
             </div>
 
             <div className="grid gap-4 p-6 md:grid-cols-2">
@@ -202,11 +258,11 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4">
-              <button type="button" onClick={() => setShowCreate(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">
+              <button type="button" onClick={closeForm} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">
                 Cancel
               </button>
               <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-                Create Project
+                {editingProject ? "Save Changes" : "Create Project"}
               </button>
             </div>
           </form>
@@ -215,4 +271,3 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
     </section>
   );
 }
-

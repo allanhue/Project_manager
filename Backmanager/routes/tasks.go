@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,6 +25,14 @@ type Task struct {
 }
 
 type createTaskRequest struct {
+	ProjectID int64    `json:"project_id" binding:"required,gt=0"`
+	Title     string   `json:"title" binding:"required"`
+	Status    string   `json:"status"`
+	Priority  string   `json:"priority"`
+	Subtasks  []string `json:"subtasks"`
+}
+
+type updateTaskRequest struct {
 	ProjectID int64    `json:"project_id" binding:"required,gt=0"`
 	Title     string   `json:"title" binding:"required"`
 	Status    string   `json:"status"`
@@ -176,6 +185,67 @@ func (s *Service) CreateTask(c *gin.Context) {
 		"Task created",
 		"Your task '"+item.Title+"' was created successfully.",
 	)
+}
+
+func (s *Service) UpdateTask(c *gin.Context) {
+	tenantID := tenantFromContext(c)
+	taskID, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
+	if err != nil || taskID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task id"})
+		return
+	}
+
+	var req updateTaskRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	if strings.TrimSpace(req.Status) == "" {
+		req.Status = "todo"
+	}
+	if strings.TrimSpace(req.Priority) == "" {
+		req.Priority = "medium"
+	}
+
+	cleanSubtasks := make([]string, 0, len(req.Subtasks))
+	for _, subtask := range req.Subtasks {
+		t := strings.TrimSpace(subtask)
+		if t != "" {
+			cleanSubtasks = append(cleanSubtasks, t)
+		}
+	}
+
+	var projectName string
+	if err := s.DB.QueryRow(c.Request.Context(), `
+		SELECT name
+		FROM projects
+		WHERE id = $1 AND tenant_id = $2
+	`, req.ProjectID, tenantID).Scan(&projectName); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "project not found for this tenant"})
+		return
+	}
+	subtasksJSON, err := json.Marshal(cleanSubtasks)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid subtasks payload"})
+		return
+	}
+
+	var item Task
+	var subtasksRaw []byte
+	err = s.DB.QueryRow(c.Request.Context(), `
+		UPDATE tasks
+		SET project_id = $1, title = $2, status = $3, priority = $4, subtasks = $5::jsonb
+		WHERE id = $6 AND tenant_id = $7
+		RETURNING id, tenant_id, project_id, title, status, priority, subtasks, created_at
+	`, req.ProjectID, strings.TrimSpace(req.Title), strings.TrimSpace(req.Status), strings.TrimSpace(req.Priority), string(subtasksJSON), taskID, tenantID).
+		Scan(&item.ID, &item.TenantID, &item.ProjectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		return
+	}
+	item.ProjectName = projectName
+	item.Subtasks = cleanSubtasks
+	c.JSON(http.StatusOK, item)
 }
 
 func parseStringArrayJSON(raw []byte) []string {
