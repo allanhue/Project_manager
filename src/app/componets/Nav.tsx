@@ -31,6 +31,7 @@ type NavProps = {
   currentPage: PageKey;
   onNavigate: (page: PageKey) => void;
   userName: string;
+  orgId?: string;
   role: "system_admin" | "org_admin";
   isSystemAdmin: boolean;
   searchQuery: string;
@@ -38,8 +39,9 @@ type NavProps = {
   onLogout: () => void;
 };
 
-export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, searchQuery, onSearchChange, onLogout }: NavProps) {
+export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAdmin, searchQuery, onSearchChange, onLogout }: NavProps) {
   const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [supportSubject, setSupportSubject] = useState("");
@@ -261,7 +263,7 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, se
 
           <button
             type="button"
-            onClick={() => onNavigate(role === "org_admin" ? "profile" : "settings")}
+            onClick={() => setProfileOpen((prev) => !prev)}
             className={`inline-flex h-9 w-9 items-center justify-center rounded-full border ${isSystemAdmin ? "border-sky-200 bg-sky-50 text-slate-800 hover:bg-sky-100" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
             aria-label="Open profile"
             title={role === "org_admin" ? "Profile" : "Account settings"}
@@ -307,6 +309,52 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, se
                   {item.createdAt ? <p className="mt-1 text-[11px] text-slate-500">{new Date(item.createdAt).toLocaleString()}</p> : null}
                 </article>
               ))}
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
+      {profileOpen ? (
+        <div className="fixed inset-0 z-40">
+          <button type="button" onClick={() => setProfileOpen(false)} className="absolute inset-0 bg-slate-950/10" aria-label="Close profile menu" />
+          <aside className="absolute right-4 top-16 w-72 rounded-lg bg-white p-3 shadow-xl">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-900">Account</p>
+              <button type="button" onClick={() => setProfileOpen(false)} className="text-xs text-slate-500">Close</button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div>
+                <p className="text-xs text-slate-500">Signed in as</p>
+                <p className="font-medium text-slate-900 truncate">{userName}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Organization ID</p>
+                <p className="font-medium text-slate-900 truncate">{orgId || "-"}</p>
+              </div>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    onLogout();
+                  }}
+                  className="w-full rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white hover:bg-rose-700"
+                >
+                  Sign out
+                </button>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    onNavigate(role === "org_admin" ? "profile" : "settings");
+                  }}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  Open profile
+                </button>
+              </div>
             </div>
           </aside>
         </div>

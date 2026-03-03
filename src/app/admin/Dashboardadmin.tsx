@@ -101,8 +101,20 @@ export default function DashboardadminPage() {
   return (
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-        <h2 className="text-lg font-semibold text-slate-900">System Analytics Dashboard</h2>
-        <p className="text-sm text-slate-600">Cross-tenant activity analytics with charts and detailed usage data.</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">System Analytics Dashboard</h2>
+            <p className="text-sm text-slate-600">Cross-tenant activity analytics with charts and detailed usage data.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="inline-flex items-center gap-2 rounded-md bg-white border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Refresh
+            </button>
+            <button className="inline-flex items-center gap-2 rounded-md bg-white border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Export CSV
+            </button>
+          </div>
+        </div>
       </header>
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}

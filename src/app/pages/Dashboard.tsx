@@ -39,8 +39,25 @@ function DashboardOverview() {
   return (
     <section className="space-y-5">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Workspace Summary</p>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">Business Operations Hub</h1>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Workspace Summary</p>
+            <h1 className="mt-1 text-2xl font-semibold text-slate-900">Business Operations Hub</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14"/></svg>
+              New Project
+            </button>
+            <button className="inline-flex items-center gap-2 rounded-md bg-white border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 11l2 2 4-4"/></svg>
+              New Task
+            </button>
+            <button className="inline-flex items-center gap-2 rounded-md bg-white border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Export
+            </button>
+          </div>
+        </div>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -204,6 +221,7 @@ export default function Dashboard() {
           currentPage={currentPage}
           onNavigate={setCurrentPage}
           userName={user?.name || "User"}
+          orgId={user?.tenant_slug || user?.tenant_id || user?.org_id || ""}
           role={userRole}
           isSystemAdmin={isSystemAdmin}
           searchQuery={searchQuery}
