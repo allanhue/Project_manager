@@ -174,7 +174,7 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, se
               : "Search this module...";
 
   return (
-    <header className={`border-b px-4 py-4 md:px-6 ${isSystemAdmin ? "border-sky-200 bg-white" : "border-slate-200 bg-white"}`}>
+    <header className={`px-4 py-4 md:px-6 bg-white`}>
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
         <div>
           <h1 className={`text-lg font-semibold ${isSystemAdmin ? "text-slate-900" : "text-slate-900"}`}>{headerTitle}</h1>
@@ -211,20 +211,17 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, se
             }`}
           />
 
-          <div className={`inline-flex items-center gap-2 rounded-xl border p-1 ${isSystemAdmin ? "border-sky-200 bg-sky-50" : "border-slate-200 bg-slate-50"}`}>
+          <div className={`inline-flex items-center gap-2 rounded-xl bg-slate-50 p-1`}>
             <button
               type="button"
               onClick={() => setNotifOpen((prev) => !prev)}
-              className={`relative rounded-lg border px-3 py-2 text-sm transition hover:-translate-y-[1px] ${isSystemAdmin ? "border-sky-200 bg-white text-slate-800 hover:bg-sky-100" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+              className={`relative flex h-9 w-9 items-center justify-center rounded-md text-slate-700 transition hover:translate-y-0.5`}
               aria-label="Notifications"
             >
-              <span className="inline-flex items-center gap-2">
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V10a6 6 0 1 0-12 0v4.2a2 2 0 0 1-.6 1.4L4 17h5" />
-                  <path d="M10 18a2 2 0 0 0 4 0" />
-                </svg>
-                <span>Alerts</span>
-              </span>
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V10a6 6 0 1 0-12 0v4.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                <path d="M10 18a2 2 0 0 0 4 0" />
+              </svg>
               {unreadCount > 0 ? (
                 <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-600 px-1 text-[11px] font-semibold text-white">
                   {unreadCount}
@@ -236,16 +233,13 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, se
               <button
                 type="button"
                 onClick={() => setSupportOpen((prev) => !prev)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:-translate-y-[1px] hover:bg-slate-50"
+                className="flex h-9 w-9 items-center justify-center rounded-md text-slate-700 transition hover:bg-slate-100"
                 aria-label="Support mailbox"
               >
-                <span className="inline-flex items-center gap-2">
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M4 6h16v12H4z" />
-                    <path d="m4 8 8 6 8-6" />
-                  </svg>
-                  <span>Support</span>
-                </span>
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M4 6h16v12H4z" />
+                  <path d="m4 8 8 6 8-6" />
+                </svg>
               </button>
             ) : null}
 
@@ -253,24 +247,18 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, se
               <button
                 type="button"
                 onClick={() => setHelpOpen((prev) => !prev)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:-translate-y-[1px] hover:bg-slate-50"
+                className="flex h-9 w-9 items-center justify-center rounded-md text-slate-700 transition hover:bg-slate-100"
                 aria-label="Help"
               >
-                <span className="inline-flex items-center gap-2">
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M9.1 9a3 3 0 1 1 4.7 2.5c-.7.5-1.3.9-1.3 1.8v.2" />
-                    <circle cx="12" cy="17" r="1" />
-                  </svg>
-                  <span>Help</span>
-                </span>
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M9.1 9a3 3 0 1 1 4.7 2.5c-.7.5-1.3.9-1.3 1.8v.2" />
+                  <circle cx="12" cy="17" r="1" />
+                </svg>
               </button>
             ) : null}
           </div>
 
-          <div className={`rounded-full border px-3 py-1.5 text-sm font-medium ${isSystemAdmin ? "border-sky-200 bg-sky-50 text-slate-800" : "border-slate-200 bg-white text-slate-700"}`}>
-            {userName}
-          </div>
           <button
             type="button"
             onClick={() => onNavigate(role === "org_admin" ? "profile" : "settings")}
@@ -282,13 +270,6 @@ export function Nav({ currentPage, onNavigate, userName, role, isSystemAdmin, se
               <circle cx="12" cy="8" r="3.1" />
               <path d="M5 20c1.6-3.2 3.9-4.8 7-4.8s5.4 1.6 7 4.8" />
             </svg>
-          </button>
-          <button
-            type="button"
-            onClick={onLogout}
-            className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${isSystemAdmin ? "border-sky-200 bg-sky-50 text-slate-800 hover:bg-sky-100" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
-          >
-            Logout
           </button>
 
         </div>

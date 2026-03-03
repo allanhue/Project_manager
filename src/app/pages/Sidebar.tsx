@@ -141,10 +141,10 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
   return (
     <aside
       className={`hidden flex-col transition-[width] duration-300 ease-in-out md:flex ${collapsed ? "w-20" : "w-72"} ${
-        isSystemAdmin ? "border-r border-sky-200 bg-white text-slate-900 shadow-sm" : "border-r border-slate-200 bg-white"
+        isSystemAdmin ? "bg-white text-slate-900 shadow-sm" : "bg-white"
       }`}
     >
-      <div className={`border-b py-3 ${collapsed ? "px-2" : "px-4"} ${isSystemAdmin ? "border-sky-200 bg-sky-50/70" : "border-slate-200"}`}>
+      <div className={`py-3 ${collapsed ? "px-2" : "px-4"} ${isSystemAdmin ? "bg-sky-50/70" : ""}`}>
         <div className="flex items-center justify-between">
           <button
             type="button"
