@@ -5,9 +5,10 @@ import { createProject, listProjects, listUsers, Project, TenantUser, updateProj
 import { LoadingSpinner } from "../componets/LoadingSpinner";
 
 function statusClass(status: string) {
-  if (status === "done") return "bg-emerald-50 text-emerald-700";
-  if (status === "blocked") return "bg-amber-50 text-amber-700";
-  return "bg-sky-50 text-sky-700";
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "done" || normalized === "completed" || normalized === "closed") return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+  if (normalized === "blocked") return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
+  return "bg-rose-50 text-rose-700 ring-1 ring-rose-200";
 }
 
 type ProjectsPageProps = {
@@ -27,6 +28,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
   const [newTeamSize, setNewTeamSize] = useState(3);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   async function loadProjects() {
     setLoading(true);
@@ -48,8 +50,9 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!newName.trim()) return;
+    if (!newName.trim() || submitting) return;
     setError("");
+    setSubmitting(true);
     try {
       const created = await createProject({
         name: newName.trim(),
@@ -69,6 +72,8 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
       setShowCreate(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create project.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -84,14 +89,16 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
   }
 
   function closeForm() {
+    if (submitting) return;
     setShowCreate(false);
     setEditingProject(null);
   }
 
   async function onUpdate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editingProject || !newName.trim()) return;
+    if (!editingProject || !newName.trim() || submitting) return;
     setError("");
+    setSubmitting(true);
     try {
       const updated = await updateProject({
         id: editingProject.id,
@@ -107,6 +114,8 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
       setShowCreate(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update project.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -129,8 +138,14 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
 
   const summary = useMemo(() => {
     const total = filteredProjects.length;
-    const active = filteredProjects.filter((project) => project.status === "active").length;
-    const done = filteredProjects.filter((project) => project.status === "done").length;
+    const active = filteredProjects.filter((project) => {
+      const normalized = project.status.trim().toLowerCase();
+      return normalized !== "done" && normalized !== "completed" && normalized !== "closed";
+    }).length;
+    const done = filteredProjects.filter((project) => {
+      const normalized = project.status.trim().toLowerCase();
+      return normalized === "done" || normalized === "completed" || normalized === "closed";
+    }).length;
     return { total, active, done };
   }, [filteredProjects]);
 
@@ -186,7 +201,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                 <tr key={project.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-2 py-3 font-medium text-slate-900">{project.name}</td>
                   <td className="px-2 py-3">
-                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusClass(project.status)}`}>{project.status}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${statusClass(project.status)}`}>{project.status}</span>
                   </td>
                   <td className="px-2 py-3 text-slate-700">{(project.assignees || []).slice(0, 2).join(", ") || "-"}</td>
                   <td className="px-2 py-3 text-slate-700">
@@ -258,11 +273,21 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4">
-              <button type="button" onClick={closeForm} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">
+              <button
+                type="button"
+                onClick={closeForm}
+                disabled={submitting}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
                 Cancel
               </button>
-              <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-                {editingProject ? "Save Changes" : "Create Project"}
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex min-w-[148px] items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:bg-slate-500"
+              >
+                {submitting ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-white" /> : null}
+                {submitting ? (editingProject ? "Saving..." : "Creating...") : editingProject ? "Save Changes" : "Create Project"}
               </button>
             </div>
           </form>
