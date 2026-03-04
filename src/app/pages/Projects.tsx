@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { createProject, listProjects, listUsers, Project, TenantUser, updateProject } from "../auth/auth";
+import { createProject, IssueItem, listIssues, listProjects, listTasks, listUsers, Project, TaskItem, TenantUser, updateProject } from "../auth/auth";
 import { LoadingSpinner } from "../componets/LoadingSpinner";
 
 function statusClass(status: string) {
@@ -28,6 +28,8 @@ type ProjectsPageProps = {
 export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<TenantUser[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [issues, setIssues] = useState<IssueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -38,15 +40,19 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
   const [newTeamSize, setNewTeamSize] = useState(3);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [selectedReportProjectID, setSelectedReportProjectID] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
 
   async function loadProjects() {
     setLoading(true);
     setError("");
     try {
-      const [items, tenantUsers] = await Promise.all([listProjects(), listUsers()]);
+      const [items, tenantUsers, taskItems, issueItems] = await Promise.all([listProjects(), listUsers(), listTasks(), listIssues()]);
       setProjects(items);
       setUsers(tenantUsers);
+      setTasks(taskItems);
+      setIssues(issueItems);
+      if (items.length > 0 && selectedReportProjectID === "") setSelectedReportProjectID(items[0].id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch projects.");
     } finally {
@@ -159,6 +165,23 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
     return { total, active, done };
   }, [filteredProjects]);
 
+  const selectedReportProject = useMemo(
+    () => projects.find((item) => item.id === selectedReportProjectID) || null,
+    [projects, selectedReportProjectID],
+  );
+  const selectedProjectTasks = useMemo(
+    () => (selectedReportProject ? tasks.filter((item) => item.project_id === selectedReportProject.id) : []),
+    [selectedReportProject, tasks],
+  );
+  const selectedProjectIssues = useMemo(
+    () => (selectedReportProject ? issues.filter((item) => item.project_id === selectedReportProject.id) : []),
+    [selectedReportProject, issues],
+  );
+  const selectedDoneTasks = selectedProjectTasks.filter((item) => {
+    const s = item.status.trim().toLowerCase();
+    return s === "done" || s === "completed" || s === "closed";
+  }).length;
+
   return (
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
@@ -173,6 +196,75 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
           </button>
         </div>
       </header>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Project Mini Report</h3>
+            <p className="text-xs text-slate-600">Choose a project to view tasks and issues raised for the same project.</p>
+          </div>
+          <select
+            value={String(selectedReportProjectID)}
+            onChange={(event) => setSelectedReportProjectID(event.target.value ? Number(event.target.value) : "")}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
+          >
+            <option value="">Select a project</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {selectedReportProject ? (
+          <>
+            <div className="mb-3 grid gap-3 sm:grid-cols-3">
+              <article className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-[11px] uppercase tracking-wide text-slate-500">Tasks</p><p className="text-lg font-semibold text-slate-900">{selectedProjectTasks.length}</p></article>
+              <article className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-[11px] uppercase tracking-wide text-slate-500">Done Tasks</p><p className="text-lg font-semibold text-emerald-700">{selectedDoneTasks}</p></article>
+              <article className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-[11px] uppercase tracking-wide text-slate-500">Issues Raised</p><p className="text-lg font-semibold text-amber-700">{selectedProjectIssues.length}</p></article>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead className="text-slate-500">
+                  <tr className="border-b border-slate-200">
+                    <th className="px-2 py-2 font-medium">Type</th>
+                    <th className="px-2 py-2 font-medium">Title</th>
+                    <th className="px-2 py-2 font-medium">Status</th>
+                    <th className="px-2 py-2 font-medium">Priority / Severity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedProjectTasks.slice(0, 6).map((item) => (
+                    <tr key={`task-mini-${item.id}`} className="border-b border-slate-100">
+                      <td className="px-2 py-2 text-slate-700">Task</td>
+                      <td className="px-2 py-2 text-slate-900">{item.title}</td>
+                      <td className="px-2 py-2 text-slate-700">{item.status}</td>
+                      <td className="px-2 py-2 text-slate-700">{item.priority}</td>
+                    </tr>
+                  ))}
+                  {selectedProjectIssues.slice(0, 6).map((item) => (
+                    <tr key={`issue-mini-${item.id}`} className="border-b border-slate-100">
+                      <td className="px-2 py-2 text-slate-700">Issue</td>
+                      <td className="px-2 py-2 text-slate-900">{item.title}</td>
+                      <td className="px-2 py-2 text-slate-700">{item.status}</td>
+                      <td className="px-2 py-2 text-slate-700">{item.severity}</td>
+                    </tr>
+                  ))}
+                  {selectedProjectTasks.length === 0 && selectedProjectIssues.length === 0 ? (
+                    <tr>
+                      <td className="px-2 py-2 text-slate-500" colSpan={4}>
+                        No tasks or issues found for this project.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-slate-500">Choose a project to display its mini report.</p>
+        )}
+      </section>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <article className="rounded-xl border border-slate-200 bg-white px-4 py-4">
@@ -222,9 +314,18 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                   <td className="px-2 py-3 text-slate-700">{project.team_size}</td>
                   <td className="px-2 py-3 text-slate-700">{new Date(project.created_at).toLocaleString()}</td>
                   <td className="px-2 py-3">
-                    <button type="button" onClick={() => openEdit(project)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100">
-                      Edit
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => openEdit(project)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100">
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedReportProjectID(project.id)}
+                        className="rounded-lg bg-slate-900 px-3 py-1 text-xs font-medium text-white"
+                      >
+                        Report
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

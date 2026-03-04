@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppNotification, NotificationSummary, listNotifications, markNotificationRead, sendSupportRequest } from "../auth/auth";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
 
 const titles: Record<PageKey, string> = {
   dashboard: "Dashboard",
@@ -11,6 +11,7 @@ const titles: Record<PageKey, string> = {
   tasks: "Tasks",
   timesheets: "Timesheets",
   analytics: "Analytics",
+  reports: "Reports",
   calendar: "Calendar",
   forum: "Forum",
   issues: "Issues",
@@ -94,6 +95,7 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
           { key: "tasks", label: "Tasks" },
           { key: "timesheets", label: "Timesheets" },
           { key: "analytics", label: "Analytics" },
+          { key: "reports", label: "Reports" },
           { key: "calendar", label: "Calendar" },
           { key: "forum", label: "Forum" },
           { key: "issues", label: "Issues" },
@@ -130,6 +132,8 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
           ? "Search tasks, subtasks..."
           : currentPage === "timesheets"
             ? "Search timesheet notes, projects..."
+          : currentPage === "reports"
+            ? "Search reports, projects..."
           : currentPage === "calendar"
           ? "Search calendar updates..."
           : currentPage === "forum"

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { listProjects, Project } from "../auth/auth";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
 
 const menu: Array<{ key: PageKey; label: string; icon: ReactNode }> = [
   {
@@ -62,6 +62,16 @@ const menu: Array<{ key: PageKey; label: string; icon: ReactNode }> = [
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M4 7h16v13H4z" />
         <path d="M8 3v4M16 3v4M4 11h16" />
+      </svg>
+    ),
+  },
+  {
+    key: "reports",
+    label: "Reports",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M5 5h14v14H5z" />
+        <path d="M8 16V9M12 16V7M16 16v-4" />
       </svg>
     ),
   },
@@ -232,8 +242,7 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
 
       {!collapsed && role === "org_admin" ? (
         <section className="shrink-0 border-t border-slate-200 px-3 py-3">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Ongoing Projects</p>
+          {/* <div className="mb-2 flex items-center justify-between">
             <button
               type="button"
               onClick={() => onNavigate("projects")}
@@ -241,7 +250,7 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
             >
               View
             </button>
-          </div>
+          </div> */}
           <div className="max-h-32 space-y-1 overflow-y-auto pr-1">
             {quickProjects.length === 0 ? <p className="rounded-md bg-slate-50 px-2 py-2 text-xs text-slate-500">No active projects.</p> : null}
             {quickProjects.map((project) => (

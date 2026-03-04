@@ -14,12 +14,13 @@ import ForumPage from "./Forum";
 import IssuesPage from "./Issues";
 import ProfilePage from "./Profile";
 import ProjectsPage from "./Projects";
+import ReportsPage from "./Reports";
 import { Sidebar } from "./Sidebar";
 import SettingsPage from "./Settings";
 import TasksPage from "./Task";
 import TimesheetsPage from "./Timesheets";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
 
 function DashboardOverview({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
   const [projectCount, setProjectCount] = useState(0);
@@ -279,6 +280,7 @@ export default function Dashboard() {
     if (currentPage === "tasks") return <TasksPage searchQuery={searchQuery} />;
     if (currentPage === "timesheets") return <TimesheetsPage searchQuery={searchQuery} />;
     if (currentPage === "analytics") return <AnalyticsPage searchQuery={searchQuery} />;
+    if (currentPage === "reports") return <ReportsPage searchQuery={searchQuery} />;
     if (currentPage === "calendar") return <CalendarPage />;
     if (currentPage === "forum") return <ForumPage searchQuery={searchQuery} />;
     if (currentPage === "issues") return <IssuesPage searchQuery={searchQuery} />;
