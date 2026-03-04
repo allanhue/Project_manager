@@ -38,6 +38,7 @@ type ForgotPasswordInput = {
 
 export type Project = {
   id: number;
+  project_code?: string;
   tenant_id: string;
   name: string;
   status: string;
@@ -51,6 +52,7 @@ export type Project = {
 
 export type TaskItem = {
   id: number;
+  task_code?: string;
   tenant_id: string;
   project_id: number;
   project_name?: string;
@@ -180,6 +182,29 @@ export type NotificationSummary = {
   assigned_pending_projects: number;
   overdue_projects: number;
   open_tasks: number;
+};
+
+export type UserSettings = {
+  timezone: string;
+  week_starts_on: "monday" | "sunday";
+  reminder_frequency: "daily" | "weekly" | "custom";
+  reminder_days: string[];
+  reminder_time: string;
+  reminders_enabled: boolean;
+  daily_digest: boolean;
+  overdue_alerts: boolean;
+  email_summaries: boolean;
+  private_projects: boolean;
+  log_retention_days: number;
+  admins_can_export: boolean;
+};
+
+export type UserProfile = {
+  display_name: string;
+  phone: string;
+  organization_name: string;
+  town: string;
+  logo_url: string;
 };
 
 function parseJwtClaims(token: string): Record<string, unknown> {
@@ -359,6 +384,7 @@ export async function listProjects(): Promise<Project[]> {
 }
 
 export async function createProject(input: {
+  project_code?: string;
   name: string;
   status?: string;
   assignees?: string[];
@@ -380,6 +406,7 @@ export async function createProject(input: {
 
 export async function updateProject(input: {
   id: number;
+  project_code?: string;
   name: string;
   status?: string;
   assignees?: string[];
@@ -396,6 +423,7 @@ export async function updateProject(input: {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
+      project_code: input.project_code || "",
       name: input.name,
       status: input.status,
       assignees: input.assignees || [],
@@ -417,6 +445,7 @@ export async function listTasks(): Promise<TaskItem[]> {
 }
 
 export async function createTask(input: {
+  task_code?: string;
   title: string;
   status?: string;
   priority?: string;
@@ -437,6 +466,7 @@ export async function createTask(input: {
 
 export async function updateTask(input: {
   id: number;
+  task_code?: string;
   title: string;
   status?: string;
   priority?: string;
@@ -452,6 +482,7 @@ export async function updateTask(input: {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
+      task_code: input.task_code || "",
       title: input.title,
       status: input.status,
       priority: input.priority,
@@ -732,5 +763,49 @@ export async function markNotificationRead(id: string): Promise<{ status: string
   return requestJSON<{ status: string }>(`/api/v1/notifications/${id}/read`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function getUserSettings(): Promise<UserSettings> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<UserSettings>("/api/v1/settings", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function updateUserSettings(input: UserSettings): Promise<{ status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ status: string }>("/api/v1/settings", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getUserProfile(): Promise<UserProfile> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<UserProfile>("/api/v1/profile", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function updateUserProfile(input: UserProfile): Promise<{ status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ status: string }>("/api/v1/profile", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
   });
 }

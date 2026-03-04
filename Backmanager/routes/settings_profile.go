@@ -263,4 +263,3 @@ func normalizeReminderDays(items []string) []string {
 	}
 	return out
 }
-

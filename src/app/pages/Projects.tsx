@@ -34,6 +34,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newProjectCode, setNewProjectCode] = useState("");
   const [newStatus, setNewStatus] = useState("active");
   const [newStartDate, setNewStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [newDurationDays, setNewDurationDays] = useState(30);
@@ -71,6 +72,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
     setSubmitting(true);
     try {
       const created = await createProject({
+        project_code: newProjectCode.trim(),
         name: newName.trim(),
         status: newStatus,
         assignees: selectedAssignees,
@@ -80,6 +82,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
       });
       setProjects((prev) => [created, ...prev]);
       setNewName("");
+      setNewProjectCode("");
       setNewStatus("active");
       setSelectedAssignees([]);
       setNewStartDate(new Date().toISOString().slice(0, 10));
@@ -96,6 +99,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
   function openCreate() {
     setEditingProject(null);
     setNewName("");
+    setNewProjectCode("");
     setNewStatus("active");
     setSelectedAssignees([]);
     setNewStartDate(new Date().toISOString().slice(0, 10));
@@ -118,6 +122,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
     try {
       const updated = await updateProject({
         id: editingProject.id,
+        project_code: newProjectCode.trim(),
         name: newName.trim(),
         status: newStatus,
         assignees: selectedAssignees,
@@ -138,6 +143,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
   function openEdit(project: Project) {
     setEditingProject(project);
     setNewName(project.name);
+    setNewProjectCode(project.project_code || "");
     setNewStatus(project.status || "active");
     setSelectedAssignees(project.assignees || []);
     setNewStartDate(project.start_date ? new Date(project.start_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
@@ -346,6 +352,16 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
               <div className="md:col-span-2">
                 <label className="mb-1 block text-sm font-medium text-slate-700">Project Name</label>
                 <input type="text" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Website redesign Q2" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Project ID (Internal)</label>
+                <input
+                  type="text"
+                  value={newProjectCode}
+                  onChange={(event) => setNewProjectCode(event.target.value)}
+                  placeholder="PRJ-001"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none"
+                />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Execution Status</label>

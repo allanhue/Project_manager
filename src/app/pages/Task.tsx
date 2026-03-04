@@ -37,6 +37,7 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [title, setTitle] = useState("");
+  const [taskCode, setTaskCode] = useState("");
   const [projectId, setProjectId] = useState("");
   const [status, setStatus] = useState("todo");
   const [priority, setPriority] = useState("medium");
@@ -72,9 +73,10 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
       .map((line) => line.trim())
       .filter(Boolean);
     try {
-      const item = await createTask({ title: title.trim(), status, priority, project_id: Number(projectId), subtasks });
+      const item = await createTask({ task_code: taskCode.trim(), title: title.trim(), status, priority, project_id: Number(projectId), subtasks });
       setTasks((prev) => [item, ...prev]);
       setTitle("");
+      setTaskCode("");
       setProjectId("");
       setStatus("todo");
       setPriority("medium");
@@ -99,6 +101,7 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
     try {
       const updated = await updateTask({
         id: editingTask.id,
+        task_code: taskCode.trim(),
         title: title.trim(),
         status,
         priority,
@@ -117,6 +120,7 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
   function openCreate() {
     setEditingTask(null);
     setTitle("");
+    setTaskCode("");
     setProjectId("");
     setStatus("todo");
     setPriority("medium");
@@ -127,6 +131,7 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
   function openEdit(task: TaskItem) {
     setEditingTask(task);
     setTitle(task.title);
+    setTaskCode(task.task_code || "");
     setProjectId(String(task.project_id));
     setStatus(task.status || "todo");
     setPriority(task.priority || "medium");
@@ -255,6 +260,16 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
               <div className="md:col-span-2">
                 <label className="mb-1 block text-sm font-medium text-slate-700">Task Title</label>
                 <input type="text" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Prepare handoff checklist" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Task ID (Internal)</label>
+                <input
+                  type="text"
+                  value={taskCode}
+                  onChange={(event) => setTaskCode(event.target.value)}
+                  placeholder="TSK-001"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none"
+                />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Priority</label>

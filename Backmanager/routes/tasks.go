@@ -14,6 +14,7 @@ import (
 
 type Task struct {
 	ID          int64     `json:"id"`
+	TaskCode    string    `json:"task_code,omitempty"`
 	TenantID    string    `json:"tenant_id"`
 	ProjectID   int64     `json:"project_id"`
 	ProjectName string    `json:"project_name,omitempty"`
@@ -25,6 +26,7 @@ type Task struct {
 }
 
 type createTaskRequest struct {
+	TaskCode  string   `json:"task_code"`
 	ProjectID int64    `json:"project_id" binding:"required,gt=0"`
 	Title     string   `json:"title" binding:"required"`
 	Status    string   `json:"status"`
@@ -33,6 +35,7 @@ type createTaskRequest struct {
 }
 
 type updateTaskRequest struct {
+	TaskCode  string   `json:"task_code"`
 	ProjectID int64    `json:"project_id" binding:"required,gt=0"`
 	Title     string   `json:"title" binding:"required"`
 	Status    string   `json:"status"`
@@ -44,6 +47,7 @@ func (s *Service) EnsureTasksTable() error {
 	_, err := s.DB.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS tasks (
 			id BIGSERIAL PRIMARY KEY,
+			task_code TEXT NOT NULL DEFAULT '',
 			tenant_id TEXT NOT NULL,
 			project_id BIGINT REFERENCES projects(id) ON DELETE CASCADE,
 			title TEXT NOT NULL,
@@ -53,6 +57,7 @@ func (s *Service) EnsureTasksTable() error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS subtasks JSONB NOT NULL DEFAULT '[]'::jsonb;
+		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_code TEXT NOT NULL DEFAULT '';
 		DO $$
 		BEGIN
 			IF EXISTS (
@@ -93,7 +98,7 @@ func (s *Service) EnsureTasksTable() error {
 func (s *Service) ListTasks(c *gin.Context) {
 	tenantID := tenantFromContext(c)
 	rows, err := s.DB.Query(c.Request.Context(), `
-		SELECT tk.id, tk.tenant_id, tk.project_id, tk.title, tk.status, tk.priority, COALESCE(tk.subtasks, '[]'::jsonb), tk.created_at, COALESCE(p.name, '')
+		SELECT tk.id, COALESCE(tk.task_code, ''), tk.tenant_id, tk.project_id, tk.title, tk.status, tk.priority, COALESCE(tk.subtasks, '[]'::jsonb), tk.created_at, COALESCE(p.name, '')
 		FROM tasks tk
 		LEFT JOIN projects p ON p.id = tk.project_id
 		WHERE tk.tenant_id = $1
@@ -111,7 +116,7 @@ func (s *Service) ListTasks(c *gin.Context) {
 		var item Task
 		var projectID sql.NullInt64
 		var subtasksRaw []byte
-		if err := rows.Scan(&item.ID, &item.TenantID, &projectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt, &item.ProjectName); err != nil {
+		if err := rows.Scan(&item.ID, &item.TaskCode, &item.TenantID, &projectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt, &item.ProjectName); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
 			return
 		}
@@ -167,11 +172,11 @@ func (s *Service) CreateTask(c *gin.Context) {
 	var item Task
 	var subtasksRaw []byte
 	err = s.DB.QueryRow(c.Request.Context(), `
-		INSERT INTO tasks (tenant_id, project_id, title, status, priority, subtasks)
-		VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-		RETURNING id, tenant_id, project_id, title, status, priority, subtasks, created_at
-	`, tenantID, req.ProjectID, req.Title, req.Status, req.Priority, string(subtasksJSON)).
-		Scan(&item.ID, &item.TenantID, &item.ProjectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt)
+		INSERT INTO tasks (task_code, tenant_id, project_id, title, status, priority, subtasks)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+		RETURNING id, task_code, tenant_id, project_id, title, status, priority, subtasks, created_at
+	`, strings.TrimSpace(req.TaskCode), tenantID, req.ProjectID, req.Title, req.Status, req.Priority, string(subtasksJSON)).
+		Scan(&item.ID, &item.TaskCode, &item.TenantID, &item.ProjectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "insert failed"})
 		return
@@ -234,11 +239,11 @@ func (s *Service) UpdateTask(c *gin.Context) {
 	var subtasksRaw []byte
 	err = s.DB.QueryRow(c.Request.Context(), `
 		UPDATE tasks
-		SET project_id = $1, title = $2, status = $3, priority = $4, subtasks = $5::jsonb
-		WHERE id = $6 AND tenant_id = $7
-		RETURNING id, tenant_id, project_id, title, status, priority, subtasks, created_at
-	`, req.ProjectID, strings.TrimSpace(req.Title), strings.TrimSpace(req.Status), strings.TrimSpace(req.Priority), string(subtasksJSON), taskID, tenantID).
-		Scan(&item.ID, &item.TenantID, &item.ProjectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt)
+		SET task_code = $1, project_id = $2, title = $3, status = $4, priority = $5, subtasks = $6::jsonb
+		WHERE id = $7 AND tenant_id = $8
+		RETURNING id, task_code, tenant_id, project_id, title, status, priority, subtasks, created_at
+	`, strings.TrimSpace(req.TaskCode), req.ProjectID, strings.TrimSpace(req.Title), strings.TrimSpace(req.Status), strings.TrimSpace(req.Priority), string(subtasksJSON), taskID, tenantID).
+		Scan(&item.ID, &item.TaskCode, &item.TenantID, &item.ProjectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 		return

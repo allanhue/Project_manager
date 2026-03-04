@@ -13,6 +13,7 @@ import (
 
 type Project struct {
 	ID           int64      `json:"id"`
+	ProjectCode  string     `json:"project_code,omitempty"`
 	TenantID     string     `json:"tenant_id"`
 	Name         string     `json:"name"`
 	Status       string     `json:"status"`
@@ -25,6 +26,7 @@ type Project struct {
 }
 
 type createProjectRequest struct {
+	ProjectCode  string   `json:"project_code"`
 	Name         string   `json:"name" binding:"required"`
 	Status       string   `json:"status"`
 	Assignees    []string `json:"assignees"`
@@ -34,6 +36,7 @@ type createProjectRequest struct {
 }
 
 type updateProjectRequest struct {
+	ProjectCode  string   `json:"project_code"`
 	Name         string   `json:"name" binding:"required"`
 	Status       string   `json:"status"`
 	Assignees    []string `json:"assignees"`
@@ -90,6 +93,7 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 
 		CREATE TABLE IF NOT EXISTS projects (
 			id BIGSERIAL PRIMARY KEY,
+			project_code TEXT NOT NULL DEFAULT '',
 			tenant_id TEXT NOT NULL,
 			name TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'active',
@@ -101,6 +105,7 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 		ALTER TABLE projects ADD COLUMN IF NOT EXISTS assignees JSONB NOT NULL DEFAULT '[]'::jsonb;
+		ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_code TEXT NOT NULL DEFAULT '';
 		ALTER TABLE projects ADD COLUMN IF NOT EXISTS start_date DATE;
 		ALTER TABLE projects ADD COLUMN IF NOT EXISTS due_date DATE;
 		ALTER TABLE projects ADD COLUMN IF NOT EXISTS duration_days INT NOT NULL DEFAULT 1;
@@ -216,7 +221,7 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 func (s *Service) ListProjects(c *gin.Context) {
 	tenantID := tenantFromContext(c)
 	rows, err := s.DB.Query(c.Request.Context(), `
-		SELECT id, tenant_id, name, status, COALESCE(assignees, '[]'::jsonb), start_date, due_date, duration_days, team_size, created_at
+		SELECT id, COALESCE(project_code, ''), tenant_id, name, status, COALESCE(assignees, '[]'::jsonb), start_date, due_date, duration_days, team_size, created_at
 		FROM projects
 		WHERE tenant_id = $1
 		ORDER BY id DESC
@@ -231,7 +236,7 @@ func (s *Service) ListProjects(c *gin.Context) {
 	for rows.Next() {
 		var p Project
 		var assigneesRaw []byte
-		if err := rows.Scan(&p.ID, &p.TenantID, &p.Name, &p.Status, &assigneesRaw, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.ProjectCode, &p.TenantID, &p.Name, &p.Status, &assigneesRaw, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
 			return
 		}
@@ -280,11 +285,11 @@ func (s *Service) CreateProject(c *gin.Context) {
 	var p Project
 	var assigneesRaw []byte
 	err = s.DB.QueryRow(c.Request.Context(), `
-		INSERT INTO projects (tenant_id, name, status, assignees, start_date, due_date, duration_days, team_size)
-		VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8)
-		RETURNING id, tenant_id, name, status, assignees, start_date, due_date, duration_days, team_size, created_at
-	`, tenantID, req.Name, req.Status, string(assigneesJSON), startDate, dueDate, req.DurationDays, req.TeamSize).
-		Scan(&p.ID, &p.TenantID, &p.Name, &p.Status, &assigneesRaw, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt)
+		INSERT INTO projects (project_code, tenant_id, name, status, assignees, start_date, due_date, duration_days, team_size)
+		VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
+		RETURNING id, project_code, tenant_id, name, status, assignees, start_date, due_date, duration_days, team_size, created_at
+	`, strings.TrimSpace(req.ProjectCode), tenantID, req.Name, req.Status, string(assigneesJSON), startDate, dueDate, req.DurationDays, req.TeamSize).
+		Scan(&p.ID, &p.ProjectCode, &p.TenantID, &p.Name, &p.Status, &assigneesRaw, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "insert failed"})
 		return
@@ -340,11 +345,11 @@ func (s *Service) UpdateProject(c *gin.Context) {
 	var assigneesRaw []byte
 	err = s.DB.QueryRow(c.Request.Context(), `
 		UPDATE projects
-		SET name = $1, status = $2, assignees = $3::jsonb, start_date = $4, due_date = $5, duration_days = $6, team_size = $7
-		WHERE id = $8 AND tenant_id = $9
-		RETURNING id, tenant_id, name, status, assignees, start_date, due_date, duration_days, team_size, created_at
-	`, strings.TrimSpace(req.Name), strings.TrimSpace(req.Status), string(assigneesJSON), startDate, dueDate, req.DurationDays, req.TeamSize, projectID, tenantID).
-		Scan(&p.ID, &p.TenantID, &p.Name, &p.Status, &assigneesRaw, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt)
+		SET project_code = $1, name = $2, status = $3, assignees = $4::jsonb, start_date = $5, due_date = $6, duration_days = $7, team_size = $8
+		WHERE id = $9 AND tenant_id = $10
+		RETURNING id, project_code, tenant_id, name, status, assignees, start_date, due_date, duration_days, team_size, created_at
+	`, strings.TrimSpace(req.ProjectCode), strings.TrimSpace(req.Name), strings.TrimSpace(req.Status), string(assigneesJSON), startDate, dueDate, req.DurationDays, req.TeamSize, projectID, tenantID).
+		Scan(&p.ID, &p.ProjectCode, &p.TenantID, &p.Name, &p.Status, &assigneesRaw, &p.StartDate, &p.DueDate, &p.DurationDays, &p.TeamSize, &p.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
 		return
