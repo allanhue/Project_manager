@@ -184,7 +184,7 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
 
   return (
     <aside
-      className={`hidden flex-col overflow-hidden border-r border-slate-200 transition-[width] duration-300 ease-in-out md:sticky md:top-0 md:flex md:h-screen md:shrink-0 ${collapsed ? "w-20" : "w-72"} ${
+      className={`hidden min-h-0 flex-col overflow-hidden border-r border-slate-200 transition-[width] duration-300 ease-in-out md:sticky md:top-0 md:flex md:h-dvh md:shrink-0 ${collapsed ? "w-20" : "w-72"} ${
         isSystemAdmin ? "bg-white text-slate-900 shadow-sm" : "bg-white"
       }`}
     >

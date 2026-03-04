@@ -308,14 +308,14 @@ export default function Dashboard() {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100">
+      <div className="flex h-dvh items-center justify-center bg-slate-100">
         <LoadingSpinner label="Loading workspace..." />
       </div>
     );
   }
 
   return (
-    <div className={`flex min-h-dvh overflow-hidden md:min-h-screen ${isSystemAdmin ? "bg-sky-50 text-slate-900" : "bg-slate-100 text-slate-900"}`}>
+    <div className={`flex h-dvh overflow-hidden ${isSystemAdmin ? "bg-sky-50 text-slate-900" : "bg-slate-100 text-slate-900"}`}>
       <Sidebar
         currentPage={currentPage}
         onNavigate={setCurrentPage}
@@ -324,7 +324,7 @@ export default function Dashboard() {
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
       />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <Nav
           currentPage={currentPage}
           onNavigate={setCurrentPage}
@@ -336,7 +336,7 @@ export default function Dashboard() {
           onSearchChange={setSearchQuery}
           onLogout={handleLogout}
         />
-        <main className={`flex-1 overflow-y-auto p-4 md:p-6 ${isSystemAdmin ? "bg-sky-50" : ""}`}>{pageContent}</main>
+        <main className={`min-h-0 flex-1 overflow-y-auto p-4 md:p-6 ${isSystemAdmin ? "bg-sky-50" : ""}`}>{pageContent}</main>
       </div>
     </div>
   );
