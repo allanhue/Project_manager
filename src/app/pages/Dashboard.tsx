@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import SystemConfigurationPage from "../admin/Configuration";
-import DashboardadminPage from "../admin/Dashboardadmin";
-import SystemAdminHome from "../admin/Home";
+import SystemConfigurationPage from "../system_admin/Configuration";
+import DashboardadminPage from "../system_admin/Dashboardadmin";
+import SystemAdminHome from "../system_admin/Home";
 import { AuthUser, getSession, logout } from "../auth/auth";
 import { Nav } from "../componets/Nav";
 import { LoadingSpinner } from "../componets/LoadingSpinner";

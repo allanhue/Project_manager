@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { createSystemUpdate, getSession, getSystemUpdates, listProjects, listTasks, Project, SystemUpdate, TaskItem, updateSystemUpdate } from "../auth/auth";
+import { createSystemUpdate, getSession, getSystemLogs, getSystemUpdates, listProjects, listTasks, Project, SystemUpdate, TaskItem, updateSystemUpdate } from "../auth/auth";
 
 function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -20,6 +20,9 @@ export default function CalendarPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [updates, setUpdates] = useState<SystemUpdate[]>([]);
+  const [supportItems, setSupportItems] = useState<
+    Array<{ id: string; tenantSlug: string; userEmail: string; createdAt: string; statusCode: number }>
+  >([]);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -36,15 +39,30 @@ export default function CalendarPage() {
     let mounted = true;
     (async () => {
       try {
-        const [projectItems, taskItems] = await Promise.all([listProjects(), listTasks()]);
-        if (!mounted) return;
-        setProjects(projectItems);
-        setTasks(taskItems);
-
         if (isSystemAdmin) {
-          const sysUpdates = await getSystemUpdates();
+          const [sysUpdates, logs] = await Promise.all([getSystemUpdates(), getSystemLogs(150)]);
           if (!mounted) return;
           setUpdates(sysUpdates);
+          setSupportItems(
+            logs
+              .filter((log) => log.path.includes("/support/request"))
+              .map((log) => ({
+                id: String(log.id),
+                tenantSlug: log.tenant_slug || "-",
+                userEmail: log.user_email || "-",
+                createdAt: log.created_at,
+                statusCode: log.status_code,
+              })),
+          );
+          setProjects([]);
+          setTasks([]);
+        } else {
+          const [projectItems, taskItems] = await Promise.all([listProjects(), listTasks()]);
+          if (!mounted) return;
+          setProjects(projectItems);
+          setTasks(taskItems);
+          setUpdates([]);
+          setSupportItems([]);
         }
       } catch (err) {
         if (!mounted) return;
@@ -139,10 +157,10 @@ export default function CalendarPage() {
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">{isSystemAdmin ? "System Update Calendar" : "Calendar Module"}</h2>
+            <h2 className="text-lg font-semibold text-slate-900">{isSystemAdmin ? "System Admin Support Calendar" : "Calendar Module"}</h2>
             <p className="text-sm text-slate-600">
               {isSystemAdmin
-                ? "Document and schedule platform updates with tenant-wide email communication."
+                ? "Track support-side schedules only: support requests and planned support windows."
                 : "Monthly timeline for project starts, deadlines and related task pressure."}
             </p>
           </div>
@@ -166,7 +184,7 @@ export default function CalendarPage() {
             </button>
             {isSystemAdmin ? (
               <button type="button" onClick={() => setShowForm((prev) => !prev)} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">
-                {showForm ? "Close Form" : "Schedule Update"}
+                {showForm ? "Close Form" : "Schedule Support Window"}
               </button>
             ) : null}
           </div>
@@ -178,8 +196,8 @@ export default function CalendarPage() {
 
       {isSystemAdmin && showForm ? (
         <form onSubmit={onCreateSystemUpdate} className="rounded-xl border border-slate-200 bg-white p-5">
-          <h3 className="text-sm font-semibold text-slate-900">{editingUpdateID === null ? "Platform Update Announcement" : "Edit Scheduled Update"}</h3>
-          <p className="mt-1 text-sm text-slate-600">Choose a future date. This announcement will be documented and emailed to all tenant org admins.</p>
+          <h3 className="text-sm font-semibold text-slate-900">{editingUpdateID === null ? "Support Schedule Announcement" : "Edit Scheduled Support Window"}</h3>
+          <p className="mt-1 text-sm text-slate-600">Choose a future date for planned support operations. This will be documented and emailed to all tenant org admins.</p>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Date</label>
@@ -192,7 +210,7 @@ export default function CalendarPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Feature Title</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Support Title</label>
               <input
                 type="text"
                 value={title}
@@ -244,7 +262,7 @@ export default function CalendarPage() {
                 </button>
               ) : null}
               <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-                {editingUpdateID === null ? "Save and Send to All Tenants" : "Update and Re-send"}
+                {editingUpdateID === null ? "Save Support Window and Notify" : "Update Support Window and Re-notify"}
               </button>
             </div>
           </div>
@@ -272,6 +290,7 @@ export default function CalendarPage() {
               return sameDay(new Date(project.due_date), day);
             });
             const dayUpdates = updates.filter((item) => sameDay(new Date(item.scheduled_date), day));
+            const daySupport = supportItems.filter((item) => sameDay(new Date(item.createdAt), day));
             const isToday = sameDay(day, new Date());
 
             return (
@@ -283,31 +302,42 @@ export default function CalendarPage() {
               >
                 <p className={`text-xs font-semibold ${isToday ? "text-sky-700" : "text-slate-700"}`}>{day.getDate()}</p>
                 <div className="mt-2 space-y-1">
-                  {dayUpdates.slice(0, 2).map((item) => (
-                    <div key={`update-${item.id}`} className="flex items-center gap-1">
-                      <p className="truncate rounded bg-indigo-100 px-2 py-1 text-[11px] text-indigo-800">Update: {item.title}</p>
-                      {isSystemAdmin ? (
-                        <button
-                          type="button"
-                          onClick={() => startEditingUpdate(item)}
-                          className="hidden rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-semibold text-white group-hover:inline-block"
-                        >
-                          Edit
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
-                  {starts.slice(0, 2).map((project) => (
-                    <p key={`start-${project.id}`} className="truncate rounded bg-sky-100 px-2 py-1 text-[11px] text-sky-800">
-                      Start: {project.name}
-                    </p>
-                  ))}
-                  {dueProjects.slice(0, 2).map((project) => (
-                    <p key={`due-${project.id}`} className="truncate rounded bg-amber-100 px-2 py-1 text-[11px] text-amber-800">
-                      Due: {project.name}
-                    </p>
-                  ))}
-                  {dueTasks.length > 0 ? <p className="rounded bg-rose-100 px-2 py-1 text-[11px] text-rose-800">{dueTasks.length} open task(s)</p> : null}
+                  {isSystemAdmin
+                    ? dayUpdates.slice(0, 2).map((item) => (
+                        <div key={`update-${item.id}`} className="flex items-center gap-1">
+                          <p className="truncate rounded bg-indigo-100 px-2 py-1 text-[11px] text-indigo-800">Support: {item.title}</p>
+                          <button
+                            type="button"
+                            onClick={() => startEditingUpdate(item)}
+                            className="hidden rounded bg-indigo-600 px-1.5 py-0.5 text-[10px] font-semibold text-white group-hover:inline-block"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      ))
+                    : null}
+                  {isSystemAdmin
+                    ? daySupport.slice(0, 2).map((item) => (
+                        <p key={`support-${item.id}`} className="truncate rounded bg-rose-100 px-2 py-1 text-[11px] text-rose-800">
+                          Support req: {item.tenantSlug} ({item.statusCode})
+                        </p>
+                      ))
+                    : null}
+                  {!isSystemAdmin
+                    ? starts.slice(0, 2).map((project) => (
+                        <p key={`start-${project.id}`} className="truncate rounded bg-sky-100 px-2 py-1 text-[11px] text-sky-800">
+                          Start: {project.name}
+                        </p>
+                      ))
+                    : null}
+                  {!isSystemAdmin
+                    ? dueProjects.slice(0, 2).map((project) => (
+                        <p key={`due-${project.id}`} className="truncate rounded bg-amber-100 px-2 py-1 text-[11px] text-amber-800">
+                          Due: {project.name}
+                        </p>
+                      ))
+                    : null}
+                  {!isSystemAdmin && dueTasks.length > 0 ? <p className="rounded bg-rose-100 px-2 py-1 text-[11px] text-rose-800">{dueTasks.length} open task(s)</p> : null}
                 </div>
               </div>
             );
