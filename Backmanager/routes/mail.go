@@ -86,12 +86,20 @@ func (s *Service) SupportRequest(c *gin.Context) {
 	if priority == "" {
 		priority = "normal"
 	}
-	subject := fmt.Sprintf("[Support][%s][%s] %s", tenant, priority, strings.TrimSpace(req.Subject))
+	subjectText := strings.TrimSpace(req.Subject)
+	subject := fmt.Sprintf("Support Request | Tenant: %s | Priority: %s | %s", tenant, strings.ToUpper(priority), subjectText)
 	message := fmt.Sprintf(
-		"Requester: %s\nTenant: %s\nPriority: %s\n\n%s",
+		"Support Request Summary\n\n"+
+			"Requester: %s\n"+
+			"Tenant: %s\n"+
+			"Priority: %s\n"+
+			"Submitted At (UTC): %s\n\n"+
+			"Issue Details:\n%s\n\n"+
+			"Please review and follow up with the requester.",
 		requester,
 		tenant,
-		priority,
+		strings.ToUpper(priority),
+		time.Now().UTC().Format("2006-01-02 15:04:05"),
 		strings.TrimSpace(req.Message),
 	)
 
