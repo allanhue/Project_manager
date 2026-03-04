@@ -11,6 +11,16 @@ function statusClass(status: string) {
   return "bg-rose-50 text-rose-700 ring-1 ring-rose-200";
 }
 
+function statusLabel(status: string) {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "done" || normalized === "completed" || normalized === "closed") return "Done";
+  if (normalized === "blocked") return "Blocked";
+  if (normalized === "in progress") return "In Progress";
+  if (normalized === "todo") return "To Do";
+  if (normalized === "active") return "Active";
+  return status;
+}
+
 type ProjectsPageProps = {
   searchQuery?: string;
 };
@@ -201,7 +211,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                 <tr key={project.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-2 py-3 font-medium text-slate-900">{project.name}</td>
                   <td className="px-2 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${statusClass(project.status)}`}>{project.status}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${statusClass(project.status)}`}>{statusLabel(project.status)}</span>
                   </td>
                   <td className="px-2 py-3 text-slate-700">{(project.assignees || []).slice(0, 2).join(", ") || "-"}</td>
                   <td className="px-2 py-3 text-slate-700">
@@ -238,10 +248,10 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Execution Status</label>
-                <select value={newStatus} onChange={(event) => setNewStatus(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300">
-                  <option value="active">active</option>
-                  <option value="done">done</option>
-                  <option value="blocked">blocked</option>
+                <select value={newStatus} onChange={(event) => setNewStatus(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none focus:border-sky-300">
+                  <option value="active">Active</option>
+                  <option value="done">Done</option>
+                  <option value="blocked">Blocked</option>
                 </select>
               </div>
               <div>

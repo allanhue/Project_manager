@@ -11,6 +11,14 @@ function chipClass(status: string) {
   return "bg-rose-50 text-rose-700 ring-1 ring-rose-200";
 }
 
+function statusLabel(status: string) {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "done" || normalized === "completed" || normalized === "closed") return "Done";
+  if (normalized === "in progress") return "In Progress";
+  if (normalized === "todo") return "To Do";
+  return status;
+}
+
 function progressFromStatus(status: string) {
   const normalized = status.trim().toLowerCase();
   if (normalized === "done" || normalized === "completed" || normalized === "closed") return 100;
@@ -190,7 +198,7 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
                   <td className="px-2 py-3 font-medium text-slate-900">{task.title}</td>
                   <td className="px-2 py-3 text-slate-700">{task.project_name || task.project_id}</td>
                   <td className="px-2 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${chipClass(task.status)}`}>{task.status}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${chipClass(task.status)}`}>{statusLabel(task.status)}</span>
                   </td>
                   <td className="px-2 py-3 text-slate-700">{task.priority}</td>
                   <td className="px-2 py-3 text-slate-700">
@@ -238,10 +246,10 @@ export default function TasksPage({ searchQuery = "" }: TasksPageProps) {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
-                <select value={status} onChange={(event) => setStatus(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300">
-                  <option value="todo">todo</option>
-                  <option value="In progress">In progress</option>
-                  <option value="done">done</option>
+                <select value={status} onChange={(event) => setStatus(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none focus:border-sky-300">
+                  <option value="todo">To Do</option>
+                  <option value="In progress">In Progress</option>
+                  <option value="done">Done</option>
                 </select>
               </div>
               <div className="md:col-span-2">
