@@ -82,6 +82,8 @@ func main() {
 		api.GET("/timesheets", svc.ListTimesheets)
 		api.POST("/timesheets", svc.CreateTimesheet)
 		api.POST("/notifications/test", svc.TestNotification)
+		api.GET("/notifications", svc.ListNotifications)
+		api.PUT("/notifications/:id/read", svc.MarkNotificationRead)
 		api.POST("/support/request", svc.SupportRequest)
 		api.PUT("/projects/:id", svc.UpdateProject)
 	}

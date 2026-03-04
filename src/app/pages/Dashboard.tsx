@@ -221,7 +221,7 @@ export default function Dashboard() {
           currentPage={currentPage}
           onNavigate={setCurrentPage}
           userName={user?.name || "User"}
-          orgId={user?.tenant_slug || user?.tenant_id || user?.org_id || ""}
+          orgId={user?.tenantSlug || ""}
           role={userRole}
           isSystemAdmin={isSystemAdmin}
           searchQuery={searchQuery}

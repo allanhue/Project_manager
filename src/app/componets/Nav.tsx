@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { getSystemLogs, listProjects, listTasks, Project, sendSupportRequest } from "../auth/auth";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AppNotification, NotificationSummary, listNotifications, markNotificationRead, sendSupportRequest } from "../auth/auth";
 
 type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
 
@@ -17,14 +17,6 @@ const titles: Record<PageKey, string> = {
   profile: "Profile",
   settings: "Settings",
   admin: "Admin",
-};
-
-type NotificationItem = {
-  id: string;
-  type: "due" | "support" | "system";
-  title: string;
-  detail: string;
-  createdAt?: string;
 };
 
 type NavProps = {
@@ -48,80 +40,44 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
   const [supportPriority, setSupportPriority] = useState("normal");
   const [supportMessage, setSupportMessage] = useState("");
   const [supportStatus, setSupportStatus] = useState("");
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [summary, setSummary] = useState<NotificationSummary | undefined>(undefined);
+
+  const refreshNotifications = useCallback(async () => {
+    try {
+      const payload = await listNotifications(40);
+      setNotifications(payload.items);
+      setSummary(payload.summary);
+    } catch {
+      setNotifications([
+        {
+          id: "notif-load-error",
+          tenant_id: orgId || "",
+          recipient_email: userName,
+          type: "system",
+          title: "Notifications unavailable",
+          detail: "Could not sync reminders right now.",
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    }
+  }, [orgId, userName]);
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
-      const next: NotificationItem[] = [];
-      try {
-        const [projects, tasks] = await Promise.all([listProjects(), listTasks()]);
-        const projectByID = new Map<number, Project>();
-        for (const project of projects) {
-          projectByID.set(project.id, project);
-          if (!project.due_date) continue;
-          const due = new Date(project.due_date);
-          const now = new Date();
-          const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-          if (diffDays <= 3) {
-            next.push({
-              id: `project-due-${project.id}`,
-              type: "due",
-              title: `Project due: ${project.name}`,
-              detail: diffDays < 0 ? "Deadline passed" : `Due in ${diffDays} day(s)`,
-              createdAt: project.due_date || undefined,
-            });
-          }
-        }
-        for (const task of tasks) {
-          if (task.status === "done") continue;
-          const project = projectByID.get(task.project_id);
-          if (!project?.due_date) continue;
-          const due = new Date(project.due_date);
-          const now = new Date();
-          const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-          if (diffDays <= 2) {
-            next.push({
-              id: `task-due-${task.id}`,
-              type: "due",
-              title: `Task due soon: ${task.title}`,
-              detail: `${task.project_name || project.name} due ${due.toLocaleDateString()}`,
-              createdAt: project.due_date || undefined,
-            });
-          }
-        }
-
-        if (role === "system_admin") {
-          const logs = await getSystemLogs(40);
-          logs
-            .filter((log) => log.path.includes("/support/request") || log.path.includes("/system/"))
-            .slice(0, 8)
-            .forEach((log) => {
-              next.push({
-                id: `sys-${log.id}`,
-                type: log.path.includes("/support/") ? "support" : "system",
-                title: log.path.includes("/support/") ? "Support activity" : "System update",
-                detail: `${log.method} ${log.path} (${log.status_code})`,
-                createdAt: log.created_at,
-              });
-            });
-        }
-      } catch {
-        next.push({
-          id: "notif-load-error",
-          type: "system",
-          title: "Notifications unavailable",
-          detail: "Could not load latest project/task alerts.",
-        });
-      }
-
+    const run = async () => {
       if (!mounted) return;
-      setNotifications(next.slice(0, 20));
-    })();
+      await refreshNotifications();
+    };
+    void run();
+    const timer = window.setInterval(() => {
+      void run();
+    }, 60000);
     return () => {
       mounted = false;
+      window.clearInterval(timer);
     };
-  }, [role]);
+  }, [refreshNotifications]);
 
   const pageList: Array<{ key: PageKey; label: string }> =
     role === "system_admin"
@@ -159,7 +115,14 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
                 : titles[currentPage]
       : titles[currentPage];
 
-  const unreadCount = useMemo(() => notifications.length, [notifications]);
+  const unreadCount = useMemo(
+    () => notifications.filter((item) => !item.read_at && item.type !== "summary").length,
+    [notifications],
+  );
+  const reminderStack = useMemo(
+    () => notifications.filter((item) => item.type !== "summary").slice(0, 3),
+    [notifications],
+  );
   const searchPlaceholder =
     currentPage === "projects"
       ? "Search projects, assignees..."
@@ -283,34 +246,78 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
           <aside className="absolute right-0 top-0 h-full w-full max-w-md border-l border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <p className="text-sm font-semibold text-slate-900">Notifications</p>
-              <button type="button" onClick={() => setNotifOpen(false)} className="text-xs text-slate-500">
-                Close
-              </button>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={() => void refreshNotifications()} className="text-xs text-slate-500">
+                  Sync
+                </button>
+                <button type="button" onClick={() => setNotifOpen(false)} className="text-xs text-slate-500">
+                  Close
+                </button>
+              </div>
             </div>
             <div className="h-[calc(100%-56px)] space-y-2 overflow-auto p-4">
+              {summary ? (
+                <article className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Reminder Summary</p>
+                  <p className="mt-1 text-xs text-slate-700">
+                    Pending: {summary.pending_projects} | Assigned: {summary.assigned_pending_projects} | Overdue: {summary.overdue_projects} | Open tasks:{" "}
+                    {summary.open_tasks}
+                  </p>
+                </article>
+              ) : null}
               {notifications.length === 0 ? <p className="text-sm text-slate-600">No notifications right now.</p> : null}
               {notifications.map((item) => (
-                <article key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <article
+                  key={item.id}
+                  onClick={async () => {
+                    if (item.read_at || !/^\d+$/.test(item.id)) return;
+                    try {
+                      await markNotificationRead(item.id);
+                      setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, read_at: new Date().toISOString() } : n)));
+                    } catch {
+                      // keep drawer usable if read state update fails
+                    }
+                  }}
+                  className={`rounded-lg border px-3 py-2 ${
+                    item.read_at ? "border-slate-200 bg-slate-50" : "cursor-pointer border-sky-200 bg-white"
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium text-slate-900">{item.title}</p>
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                        item.type === "due"
+                        item.type === "project"
                           ? "bg-amber-100 text-amber-800"
                           : item.type === "support"
                             ? "bg-sky-100 text-sky-800"
-                            : "bg-slate-200 text-slate-700"
+                            : item.type === "summary"
+                              ? "bg-indigo-100 text-indigo-700"
+                              : "bg-slate-200 text-slate-700"
                       }`}
                     >
                       {item.type}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-slate-600">{item.detail}</p>
-                  {item.createdAt ? <p className="mt-1 text-[11px] text-slate-500">{new Date(item.createdAt).toLocaleString()}</p> : null}
+                  {item.created_at ? <p className="mt-1 text-[11px] text-slate-500">{new Date(item.created_at).toLocaleString()}</p> : null}
                 </article>
               ))}
             </div>
           </aside>
+        </div>
+      ) : null}
+
+      {reminderStack.length > 0 ? (
+        <div className="pointer-events-none fixed bottom-4 right-4 z-30 hidden w-80 space-y-2 md:block">
+          {reminderStack.map((item) => (
+            <article key={`toast-${item.id}`} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+              <div className="mb-1 h-1 w-full rounded-full bg-slate-100">
+                <div className={`h-1 rounded-full ${item.type === "project" ? "bg-amber-400" : "bg-sky-500"}`} style={{ width: "68%" }} />
+              </div>
+              <p className="text-xs font-semibold text-slate-900">{item.title}</p>
+              <p className="mt-0.5 text-[11px] text-slate-600">{item.detail}</p>
+            </article>
+          ))}
         </div>
       ) : null}
 

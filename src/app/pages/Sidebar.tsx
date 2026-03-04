@@ -126,8 +126,12 @@ type SidebarProps = {
 export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapsed, onToggleCollapse }: SidebarProps) {
   const visibleMenu =
     role === "system_admin"
-      ? menu.filter((item) => item.key === "dashboard" || item.key === "analytics" || item.key === "calendar" || item.key === "admin" || item.key === "settings")
-      : menu.filter((item) => item.key !== "admin");
+      ? menu.filter((item) => item.key === "dashboard" || item.key === "analytics" || item.key === "calendar" || item.key === "admin")
+      : menu.filter((item) => item.key !== "admin" && item.key !== "profile" && item.key !== "settings");
+  const bottomMenu =
+    role === "system_admin"
+      ? menu.filter((item) => item.key === "settings")
+      : menu.filter((item) => item.key === "profile" || item.key === "settings");
 
   function displayLabel(key: PageKey, fallback: string) {
     if (role !== "system_admin") return fallback;
@@ -195,6 +199,52 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
           })}
         </ul>
       </nav>
+
+      <div className={`border-t ${isSystemAdmin ? "border-sky-100" : "border-slate-200"} py-3 ${collapsed ? "px-2" : "px-3"}`}>
+        <ul className="space-y-1">
+          {bottomMenu.map((item) => {
+            const isActive = currentPage === item.key;
+            const isHelp = item.key === "settings";
+            const icon = isHelp ? (
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M9.2 9a2.9 2.9 0 1 1 4.4 2.4c-.6.4-1.2.8-1.2 1.6v.3" />
+                <circle cx="12" cy="17" r="1" />
+              </svg>
+            ) : (
+              item.icon
+            );
+            const label = role === "system_admin" ? "Help & Config" : item.key === "settings" ? "Help & Settings" : "Profile";
+
+            return (
+              <li key={`bottom-${item.key}`}>
+                <button
+                  type="button"
+                  onClick={() => onNavigate(item.key)}
+                  className={`w-full rounded-lg py-2 transition-all duration-200 ${collapsed ? "px-2 text-center" : "px-3 text-left"} ${
+                    isActive
+                      ? isSystemAdmin
+                        ? "bg-sky-100 text-sky-900 ring-1 ring-sky-300"
+                        : "bg-sky-50 text-sky-700 ring-1 ring-sky-200"
+                      : isSystemAdmin
+                        ? "text-slate-700 hover:-translate-y-[1px] hover:bg-sky-50 hover:text-slate-900"
+                        : "text-slate-700 hover:-translate-y-[1px] hover:bg-slate-100 hover:text-slate-900"
+                  }`}
+                >
+                  {collapsed ? (
+                    <span className="inline-flex items-center justify-center">{icon}</span>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <span className={`mt-0.5 inline-flex items-center justify-center ${isSystemAdmin ? "text-sky-700" : "text-slate-500"}`}>{icon}</span>
+                      <span className="text-sm font-medium">{label}</span>
+                    </div>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </aside>
   );
 }

@@ -157,6 +157,22 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 		CREATE INDEX IF NOT EXISTS idx_issues_tenant_id ON issues (tenant_id);
+
+		CREATE TABLE IF NOT EXISTS notifications (
+			id BIGSERIAL PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			recipient_email TEXT NOT NULL,
+			type TEXT NOT NULL DEFAULT 'info',
+			title TEXT NOT NULL,
+			detail TEXT NOT NULL,
+			meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+			read_at TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_notifications_tenant_recipient_created
+			ON notifications (tenant_id, recipient_email, created_at DESC);
+		CREATE INDEX IF NOT EXISTS idx_notifications_unread
+			ON notifications (tenant_id, recipient_email, read_at);
 	`)
 	return err
 }
@@ -299,4 +315,21 @@ func (s *Service) UpdateProject(c *gin.Context) {
 	}
 	p.Assignees = cleanAssignees
 	c.JSON(http.StatusOK, p)
+
+	if strings.EqualFold(strings.TrimSpace(p.Status), "pending") {
+		openTasks, _ := s.countOpenProjectTasks(c.Request.Context(), tenantID, p.ID)
+		detail := "Project is pending review and still has active work."
+		if p.DueDate != nil {
+			detail = "Project is pending review. Due " + p.DueDate.Format("2006-01-02") + ". Open tasks: " + strconv.FormatInt(openTasks, 10) + "."
+		}
+		s.notifyProjectAssignees(
+			c.Request.Context(),
+			p.TenantID,
+			p.ID,
+			p.Name,
+			cleanAssignees,
+			"Pending project reminder: "+p.Name,
+			detail,
+		)
+	}
 }

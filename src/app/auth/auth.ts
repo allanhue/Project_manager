@@ -163,6 +163,25 @@ export type SystemUpdate = {
   created_at: string;
 };
 
+export type AppNotification = {
+  id: string;
+  tenant_id: string;
+  recipient_email: string;
+  type: "project" | "due" | "support" | "system" | "summary" | string;
+  title: string;
+  detail: string;
+  meta?: Record<string, unknown>;
+  read_at?: string | null;
+  created_at: string;
+};
+
+export type NotificationSummary = {
+  pending_projects: number;
+  assigned_pending_projects: number;
+  overdue_projects: number;
+  open_tasks: number;
+};
+
 function parseJwtClaims(token: string): Record<string, unknown> {
   try {
     const parts = token.split(".");
@@ -694,5 +713,24 @@ export async function sendSupportRequest(input: { subject: string; message: stri
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(input),
+  });
+}
+
+export async function listNotifications(limit = 30): Promise<{ items: AppNotification[]; summary?: NotificationSummary }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: AppNotification[]; summary?: NotificationSummary }>(`/api/v1/notifications?limit=${limit}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return { items: payload.items || [], summary: payload.summary };
+}
+
+export async function markNotificationRead(id: string): Promise<{ status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ status: string }>(`/api/v1/notifications/${id}/read`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
