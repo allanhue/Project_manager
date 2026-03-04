@@ -8,9 +8,9 @@ export const metadata: Metadata = {
   title: "PulseForge Management",
   description: "Project Workspace",
   icons: {
-    icon: "/brand-logo.jpg",
-    shortcut: "/brand-logo.jpg",
-    apple: "/brand-logo.jpg",
+    icon: "/WhatsApp%20Image%202025-11-13%20at%2017.19.42_d06efc8c.jpg",
+    shortcut: "/WhatsApp%20Image%202025-11-13%20at%2017.19.42_d06efc8c.jpg",
+    apple: "/WhatsApp%20Image%202025-11-13%20at%2017.19.42_d06efc8c.jpg",
   },
 };
 
