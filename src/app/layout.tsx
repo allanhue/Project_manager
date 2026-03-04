@@ -5,8 +5,11 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "PulseForge - Project & Task Manager",
-  description: "Project and task management workspace",
+  title: "PulseForge Project Management",
+  description: "Project Workspace",
+  icons: {
+    icon: "/WhatsApp Image 2025-11-13 at 17.19.42_d06efc8c.jpg",
+  },
 };
 
 export default function RootLayout({
