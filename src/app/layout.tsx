@@ -7,9 +7,10 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "PulseForge Management",
   description: "Project Workspace",
-  //favicon placed
   icons: {
-    icon: "/WhatsApp Image 2025-11-13 at 17.19.42_d06efc8c.jpg",
+    icon: "/brand-logo.jpg",
+    shortcut: "/brand-logo.jpg",
+    apple: "/brand-logo.jpg",
   },
 };
 

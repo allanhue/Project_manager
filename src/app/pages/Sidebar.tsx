@@ -186,6 +186,7 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
 
   const headerOrgName = (orgName || "").trim() || (role === "system_admin" ? "System Admin" : "Organization");
   const orgInitial = headerOrgName.slice(0, 1).toUpperCase();
+  const headerLogo = (orgLogoUrl || "").trim() || "/brand-logo.jpg";
 
   return (
     <aside
@@ -197,8 +198,8 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
         <div className={`flex ${collapsed ? "justify-center" : "items-center justify-between"} gap-2`}>
           {!collapsed ? (
             <div className="flex min-w-0 items-center gap-2">
-              {orgLogoUrl ? (
-                <img src={orgLogoUrl} alt={`${headerOrgName} logo`} className="h-8 w-8 rounded-md border border-slate-200 object-cover" />
+              {headerLogo ? (
+                <img src={headerLogo} alt={`${headerOrgName} logo`} className="h-8 w-8 rounded-md border border-slate-200 object-cover" />
               ) : (
                 <span className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold ${isSystemAdmin ? "bg-sky-100 text-sky-800" : "bg-slate-100 text-slate-700"}`}>
                   {orgInitial || "O"}
