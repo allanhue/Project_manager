@@ -11,12 +11,14 @@ export default function SystemSupportPage() {
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("System support notification");
   const [message, setMessage] = useState("Hello, this is a support notification from system administration.");
+  const [sendingMail, setSendingMail] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const systemLogs = await getSystemLogs(120);
+        const systemLogs = await getSystemLogs(40);
         if (!mounted) return;
         setLogs(systemLogs);
       } catch (err) {
@@ -31,19 +33,26 @@ export default function SystemSupportPage() {
 
   async function onSend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (sendingMail) return;
     try {
+      setSendingMail(true);
       setMailStatus("Sending...");
       await sendTestNotification({ email, subject, message });
       setMailStatus("Support email sent.");
       setShowMailModal(false);
     } catch (err) {
       setMailStatus(err instanceof Error ? err.message : "Failed to send support email.");
+    } finally {
+      setSendingMail(false);
     }
   }
 
-  const errorCount = logs.filter((item) => item.status_code >= 500).length;
-  const warnCount = logs.filter((item) => item.status_code >= 400 && item.status_code < 500).length;
-  const avgLatency = logs.length > 0 ? Math.round(logs.reduce((sum, item) => sum + item.latency_ms, 0) / logs.length) : 0;
+  const healthLogs = logs
+    .filter((item) => item.status_code >= 400 || item.latency_ms >= 800 || item.path.includes("/health") || item.path.includes("/support/"))
+    .slice(0, 18);
+  const errorCount = healthLogs.filter((item) => item.status_code >= 500).length;
+  const warnCount = healthLogs.filter((item) => item.status_code >= 400 && item.status_code < 500).length;
+  const avgLatency = healthLogs.length > 0 ? Math.round(healthLogs.reduce((sum, item) => sum + item.latency_ms, 0) / healthLogs.length) : 0;
 
   return (
     <section className="space-y-4">
@@ -87,16 +96,21 @@ export default function SystemSupportPage() {
           <button
             type="button"
             onClick={async () => {
+              if (refreshing) return;
+              setRefreshing(true);
               try {
-                const systemLogs = await getSystemLogs(120);
+                const systemLogs = await getSystemLogs(40);
                 setLogs(systemLogs);
               } catch (err) {
                 setError(err instanceof Error ? err.message : "Failed to refresh logs.");
+              } finally {
+                setRefreshing(false);
               }
             }}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
           >
-            Refresh
+            {refreshing ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400/60 border-t-slate-700" /> : null}
+            {refreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
         <div className="overflow-x-auto">
@@ -113,7 +127,7 @@ export default function SystemSupportPage() {
               </tr>
             </thead>
             <tbody>
-              {logs.map((log) => (
+              {healthLogs.map((log) => (
                 <tr key={log.id} className="border-b border-slate-100">
                   <td className="px-2 py-3 text-slate-700">{new Date(log.created_at).toLocaleString()}</td>
                   <td className="px-2 py-3 text-slate-700">{log.tenant_slug || "-"}</td>
@@ -181,8 +195,13 @@ export default function SystemSupportPage() {
               >
                 Cancel
               </button>
-              <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-                Send
+              <button
+                type="submit"
+                disabled={sendingMail}
+                className="inline-flex min-w-[94px] items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:bg-slate-500"
+              >
+                {sendingMail ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-white" /> : null}
+                {sendingMail ? "Sending..." : "Send"}
               </button>
             </div>
           </form>

@@ -31,6 +31,7 @@ export default function CalendarPage() {
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [expectations, setExpectations] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const role = getSession()?.user.role || "org_admin";
   const isSystemAdmin = role === "system_admin";
@@ -76,14 +77,17 @@ export default function CalendarPage() {
 
   async function onCreateSystemUpdate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) return;
     setError("");
     setStatus("Scheduling update and sending emails...");
+    setSubmitting(true);
     const selected = new Date(scheduledDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (!scheduledDate || selected <= today) {
       setError("Select a date after today.");
       setStatus("");
+      setSubmitting(false);
       return;
     }
     try {
@@ -118,6 +122,8 @@ export default function CalendarPage() {
     } catch (err) {
       setStatus("");
       setError(err instanceof Error ? err.message : "Failed to create system update.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -261,15 +267,26 @@ export default function CalendarPage() {
                   Cancel Edit
                 </button>
               ) : null}
-              <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-                {editingUpdateID === null ? "Save Support Window and Notify" : "Update Support Window and Re-notify"}
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex min-w-[240px] items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition disabled:bg-slate-500"
+              >
+                {submitting ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-white" /> : null}
+                {submitting
+                  ? editingUpdateID === null
+                    ? "Saving..."
+                    : "Updating..."
+                  : editingUpdateID === null
+                    ? "Save Support Window and Notify"
+                    : "Update Support Window and Re-notify"}
               </button>
             </div>
           </div>
         </form>
       ) : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="max-h-[calc(100dvh-220px)] overflow-auto rounded-xl border border-slate-200 bg-white p-4">
         <div className="grid grid-cols-7 gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
             <div key={label} className="rounded-lg bg-slate-50 px-2 py-2 text-center">

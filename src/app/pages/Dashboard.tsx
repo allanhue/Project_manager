@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import SystemConfigurationPage from "../system_admin/Configuration";
 import DashboardadminPage from "../system_admin/Dashboardadmin";
 import SystemAdminHome from "../system_admin/Home";
-import { AuthUser, getSession, logout } from "../auth/auth";
+import { AuthUser, getSession, getSystemAnalytics, getSystemLogs, getSystemUpdates, listProjects, listTasks, logout, SystemAnalytics, SystemLog, SystemUpdate } from "../auth/auth";
 import { Nav } from "../componets/Nav";
 import { LoadingSpinner } from "../componets/LoadingSpinner";
 import AnalyticsPage from "./Analytics";
@@ -21,21 +21,54 @@ import TimesheetsPage from "./Timesheets";
 
 type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
 
-const stats = [
-  { label: "Receivables", value: "KES 1.42M", change: "+9% vs last month" },
-  { label: "Payables", value: "KES 630K", change: "12 due this week" },
-  { label: "Project Revenue", value: "KES 2.87M", change: "Current cycle" },
-  { label: "Open Work Orders", value: "28", change: "6 high priority" },
-];
+function DashboardOverview({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
+  const [projectCount, setProjectCount] = useState(0);
+  const [taskCount, setTaskCount] = useState(0);
+  const [doneTaskCount, setDoneTaskCount] = useState(0);
+  const [pendingProjectCount, setPendingProjectCount] = useState(0);
+  const [recentProjects, setRecentProjects] = useState<Array<{ id: number; name: string; status: string; assignees: number }>>([]);
+  const [error, setError] = useState("");
 
-const activities = [
-  "API migration moved to In Review by Allan Mwangi",
-  "Mobile onboarding wireframes approved by Design team",
-  "Client feedback added to Sprint 12 backlog",
-  "Tenant onboarding checklist updated for Acme Labs",
-];
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [projects, tasks] = await Promise.all([listProjects(), listTasks()]);
+        if (!mounted) return;
+        const doneTasks = tasks.filter((item) => {
+          const normalized = item.status.trim().toLowerCase();
+          return normalized === "done" || normalized === "completed" || normalized === "closed";
+        }).length;
+        const pendingProjects = projects.filter((item) => item.status.trim().toLowerCase() === "pending").length;
+        setProjectCount(projects.length);
+        setTaskCount(tasks.length);
+        setDoneTaskCount(doneTasks);
+        setPendingProjectCount(pendingProjects);
+        setRecentProjects(
+          projects.slice(0, 6).map((item) => ({
+            id: item.id,
+            name: item.name,
+            status: item.status,
+            assignees: (item.assignees || []).length,
+          })),
+        );
+      } catch (err) {
+        if (!mounted) return;
+        setError(err instanceof Error ? err.message : "Failed to load dashboard.");
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-function DashboardOverview() {
+  const completion = taskCount > 0 ? Math.round((doneTaskCount / taskCount) * 100) : 0;
+  const announcements = [
+    `You have ${pendingProjectCount} pending project(s) that need closure.`,
+    `${taskCount - doneTaskCount} task(s) still open across your workspace.`,
+    "Use Calendar to track pressure points and due windows.",
+  ];
+
   return (
     <section className="space-y-5">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
@@ -45,55 +78,78 @@ function DashboardOverview() {
             <h1 className="mt-1 text-2xl font-semibold text-slate-900">Business Operations Hub</h1>
           </div>
           <div className="flex items-center gap-2">
-            <button className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700">
+            <button onClick={() => onNavigate("projects")} className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700">
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14"/></svg>
               New Project
             </button>
-            <button className="inline-flex items-center gap-2 rounded-md bg-white border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <button onClick={() => onNavigate("tasks")} className="inline-flex items-center gap-2 rounded-md bg-white border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 11l2 2 4-4"/></svg>
               New Task
             </button>
-            <button className="inline-flex items-center gap-2 rounded-md bg-white border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <button onClick={() => onNavigate("calendar")} className="inline-flex items-center gap-2 rounded-md bg-white border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
               Export
             </button>
           </div>
         </div>
       </header>
+      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((item) => (
-          <article key={item.label} className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{item.label}</p>
-            <p className="mt-2 text-3xl font-semibold text-slate-900">{item.value}</p>
-            <p className="mt-1 text-xs text-slate-600">{item.change}</p>
-          </article>
-        ))}
+        <article className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Projects</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{projectCount}</p>
+          <p className="mt-1 text-xs text-slate-600">{pendingProjectCount} pending</p>
+        </article>
+        <article className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Tasks</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{taskCount}</p>
+          <p className="mt-1 text-xs text-slate-600">{doneTaskCount} done</p>
+        </article>
+        <article className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Completion</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{completion}%</p>
+          <p className="mt-1 text-xs text-slate-600">based on task statuses</p>
+        </article>
+        <article className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Health</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{completion >= 75 ? "Good" : completion >= 50 ? "Watch" : "Risk"}</p>
+          <p className="mt-1 text-xs text-slate-600">delivery posture</p>
+        </article>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">Cashflow and Delivery Pulse</h2>
-            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-              On Track
+            <h2 className="text-sm font-semibold text-slate-900">Announcements</h2>
+            <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+              Live
             </span>
           </div>
           <ul className="space-y-3 text-sm text-slate-700">
-            <li className="rounded-lg bg-slate-50 px-3 py-2">Pending invoices reduced by 14% this cycle.</li>
-            <li className="rounded-lg bg-slate-50 px-3 py-2">Collections reminders sent to 8 overdue accounts.</li>
-            <li className="rounded-lg bg-slate-50 px-3 py-2">Project delivery throughput improved week-over-week.</li>
+            {announcements.map((line) => (
+              <li key={line} className="rounded-lg bg-slate-50 px-3 py-2">{line}</li>
+            ))}
           </ul>
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-slate-900">Recent Activity</h2>
-          <ul className="space-y-3 text-sm text-slate-700">
-            {activities.map((activity) => (
-              <li key={activity} className="border-l-2 border-slate-200 pl-3">
-                {activity}
-              </li>
-            ))}
-          </ul>
+          <h2 className="mb-4 text-sm font-semibold text-slate-900">Type Snapshot</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[320px] text-left text-sm">
+              <thead className="text-slate-500">
+                <tr className="border-b border-slate-200">
+                  <th className="px-2 py-2 font-medium">Type</th>
+                  <th className="px-2 py-2 font-medium">Count</th>
+                  <th className="px-2 py-2 font-medium">Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-slate-100"><td className="px-2 py-2">Projects</td><td className="px-2 py-2">{projectCount}</td><td className="px-2 py-2 text-slate-600">{pendingProjectCount} pending</td></tr>
+                <tr className="border-b border-slate-100"><td className="px-2 py-2">Tasks</td><td className="px-2 py-2">{taskCount}</td><td className="px-2 py-2 text-slate-600">{taskCount - doneTaskCount} open</td></tr>
+                <tr><td className="px-2 py-2">Recent Projects</td><td className="px-2 py-2">{recentProjects.length}</td><td className="px-2 py-2 text-slate-600">latest added</td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
     </section>
@@ -101,6 +157,34 @@ function DashboardOverview() {
 }
 
 function SystemAdminDashboardPage() {
+  const [analytics, setAnalytics] = useState<SystemAnalytics | null>(null);
+  const [updates, setUpdates] = useState<SystemUpdate[]>([]);
+  const [logs, setLogs] = useState<SystemLog[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [a, u, l] = await Promise.all([getSystemAnalytics(), getSystemUpdates(), getSystemLogs(50)]);
+        if (!mounted) return;
+        setAnalytics(a);
+        setUpdates(u.slice(0, 5));
+        setLogs(l);
+      } catch (err) {
+        if (!mounted) return;
+        setError(err instanceof Error ? err.message : "Failed to load system dashboard.");
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const healthLogs = logs
+    .filter((item) => item.status_code >= 400 || item.latency_ms >= 800 || item.path.includes("/health"))
+    .slice(0, 8);
+
   return (
     <section className="space-y-5">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
@@ -108,25 +192,47 @@ function SystemAdminDashboardPage() {
         <h1 className="mt-1 text-2xl font-semibold text-slate-900">Operations Control Center</h1>
         <p className="mt-2 text-sm text-slate-600">Central overview for platform health, tenant activity, and support workflow.</p>
       </header>
+      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <article className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-wide text-slate-500">Tenants</p><p className="mt-2 text-2xl font-semibold text-slate-900">{analytics?.tenant_count ?? "-"}</p></article>
+        <article className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-wide text-slate-500">Active Users (24h)</p><p className="mt-2 text-2xl font-semibold text-slate-900">{analytics?.active_users_24h ?? "-"}</p></article>
+        <article className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-wide text-slate-500">Active Tenants (7d)</p><p className="mt-2 text-2xl font-semibold text-slate-900">{analytics?.active_tenants_7d ?? "-"}</p></article>
+        <article className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs uppercase tracking-wide text-slate-500">System Health Alerts</p><p className="mt-2 text-2xl font-semibold text-slate-900">{healthLogs.length}</p></article>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <article className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Analytics</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            Open <span className="font-semibold text-slate-900">Analytics</span> to view usage charts, active organizations, and engagement trends.
-          </p>
+          <h2 className="text-sm font-semibold text-slate-900">Announcements</h2>
+          <ul className="mt-2 space-y-2 text-sm text-slate-700">
+            {updates.length === 0 ? <li className="rounded-lg bg-slate-50 px-3 py-2">No upcoming announcements.</li> : null}
+            {updates.map((item) => (
+              <li key={item.id} className="rounded-lg bg-slate-50 px-3 py-2">
+                {item.scheduled_date}: {item.title}
+              </li>
+            ))}
+          </ul>
         </article>
         <article className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Support</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            Open <span className="font-semibold text-slate-900">Support</span> to inspect logs, debug issues, and send support communication.
-          </p>
-        </article>
-        <article className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Configuration</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            Open <span className="font-semibold text-slate-900">Configuration</span> to add and edit tenant details and org IDs.
-          </p>
+          <h2 className="text-sm font-semibold text-slate-900">System Health (compact)</h2>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[420px] text-left text-xs">
+              <thead className="text-slate-500">
+                <tr className="border-b border-slate-200"><th className="px-2 py-2 font-medium">Time</th><th className="px-2 py-2 font-medium">Path</th><th className="px-2 py-2 font-medium">Status</th><th className="px-2 py-2 font-medium">Latency</th></tr>
+              </thead>
+              <tbody>
+                {healthLogs.map((log) => (
+                  <tr key={log.id} className="border-b border-slate-100">
+                    <td className="px-2 py-2 text-slate-700">{new Date(log.created_at).toLocaleTimeString()}</td>
+                    <td className="px-2 py-2 text-slate-700">{log.path}</td>
+                    <td className="px-2 py-2 text-slate-700">{log.status_code}</td>
+                    <td className="px-2 py-2 text-slate-700">{log.latency_ms}ms</td>
+                  </tr>
+                ))}
+                {healthLogs.length === 0 ? <tr><td className="px-2 py-2 text-slate-500" colSpan={4}>No health alerts.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
         </article>
       </div>
     </section>
@@ -178,8 +284,8 @@ export default function Dashboard() {
     if (currentPage === "issues") return <IssuesPage searchQuery={searchQuery} />;
     if (currentPage === "profile" && user) return <ProfilePage user={user} />;
     if (currentPage === "settings") return <SettingsPage />;
-    if (currentPage === "admin") return <DashboardOverview />;
-    return <DashboardOverview />;
+    if (currentPage === "admin") return <DashboardOverview onNavigate={setCurrentPage} />;
+    return <DashboardOverview onNavigate={setCurrentPage} />;
   }, [currentPage, searchQuery, user]);
 
   useEffect(() => {

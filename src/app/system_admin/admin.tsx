@@ -13,6 +13,8 @@ export default function TenantAdminPage() {
   const [priority, setPriority] = useState("normal");
   const [message, setMessage] = useState("");
   const [supportStatus, setSupportStatus] = useState("");
+  const [submittingSupport, setSubmittingSupport] = useState(false);
+  const [sendingTestMail, setSendingTestMail] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -40,8 +42,10 @@ export default function TenantAdminPage() {
 
   async function onSupportSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submittingSupport) return;
     setSupportStatus("");
     try {
+      setSubmittingSupport(true);
       await sendSupportRequest({ subject, priority, message });
       setSupportStatus("Support request sent.");
       setSubject("");
@@ -50,6 +54,8 @@ export default function TenantAdminPage() {
       setShowSupportModal(false);
     } catch (err) {
       setSupportStatus(err instanceof Error ? err.message : "Failed to send support request.");
+    } finally {
+      setSubmittingSupport(false);
     }
   }
 
@@ -83,17 +89,23 @@ export default function TenantAdminPage() {
           <button
             type="button"
             onClick={async () => {
+              if (sendingTestMail) return;
               try {
+                setSendingTestMail(true);
                 setMailStatus("Sending...");
                 await sendTestNotification({ subject: "Org admin notification", message: "Notification channel is active." });
                 setMailStatus("Test notification sent.");
               } catch (err) {
                 setMailStatus(err instanceof Error ? err.message : "Failed to send notification.");
+              } finally {
+                setSendingTestMail(false);
               }
             }}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
+            disabled={sendingTestMail}
+            className="inline-flex min-w-[146px] items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
           >
-            Send Test Email
+            {sendingTestMail ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400/60 border-t-slate-700" /> : null}
+            {sendingTestMail ? "Sending..." : "Send Test Email"}
           </button>
           <button
             type="button"
@@ -158,8 +170,13 @@ export default function TenantAdminPage() {
               >
                 Cancel
               </button>
-              <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-                Submit Request
+              <button
+                type="submit"
+                disabled={submittingSupport}
+                className="inline-flex min-w-[140px] items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:bg-slate-500"
+              >
+                {submittingSupport ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-white" /> : null}
+                {submittingSupport ? "Submitting..." : "Submit Request"}
               </button>
             </div>
           </form>
