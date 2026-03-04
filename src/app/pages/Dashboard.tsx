@@ -207,7 +207,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className={`flex min-h-screen ${isSystemAdmin ? "bg-sky-50 text-slate-900" : "bg-slate-100 text-slate-900"}`}>
+    <div className={`flex min-h-dvh overflow-hidden md:min-h-screen ${isSystemAdmin ? "bg-sky-50 text-slate-900" : "bg-slate-100 text-slate-900"}`}>
       <Sidebar
         currentPage={currentPage}
         onNavigate={setCurrentPage}
@@ -216,7 +216,7 @@ export default function Dashboard() {
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
       />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Nav
           currentPage={currentPage}
           onNavigate={setCurrentPage}

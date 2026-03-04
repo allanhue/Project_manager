@@ -144,11 +144,11 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
 
   return (
     <aside
-      className={`hidden flex-col transition-[width] duration-300 ease-in-out md:flex ${collapsed ? "w-20" : "w-72"} ${
+      className={`hidden flex-col overflow-hidden border-r border-slate-200 transition-[width] duration-300 ease-in-out md:sticky md:top-0 md:flex md:h-screen md:shrink-0 ${collapsed ? "w-20" : "w-72"} ${
         isSystemAdmin ? "bg-white text-slate-900 shadow-sm" : "bg-white"
       }`}
     >
-      <div className={`py-3 ${collapsed ? "px-2" : "px-4"} ${isSystemAdmin ? "bg-sky-50/70" : ""}`}>
+      <div className={`shrink-0 py-3 ${collapsed ? "px-2" : "px-4"} ${isSystemAdmin ? "bg-sky-50/70" : ""}`}>
         <div className="flex items-center justify-between">
           <button
             type="button"
@@ -166,8 +166,8 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
         </div>
       </div>
 
-      <nav className={`flex-1 py-4 ${collapsed ? "px-2" : "px-3"}`}>
-        <ul className="space-y-1">
+      <nav className={`flex-1 overflow-y-auto py-4 ${collapsed ? "px-2" : "px-3"}`}>
+        <ul className="space-y-1 pb-2">
           {visibleMenu.map((item) => {
             const isActive = currentPage === item.key;
             return (
@@ -175,7 +175,7 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
                 <button
                   type="button"
                   onClick={() => onNavigate(item.key)}
-                  className={`w-full rounded-lg py-2 transition-all duration-200 ${collapsed ? "px-2 text-center" : "px-3 text-left"} ${
+                  className={`w-full min-h-[40px] rounded-lg py-2 transition-all duration-200 ${collapsed ? "px-2 text-center" : "px-3 text-left"} ${
                     isActive
                       ? isSystemAdmin
                         ? "bg-sky-100 text-sky-900 ring-1 ring-sky-300"
@@ -200,7 +200,7 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
         </ul>
       </nav>
 
-      <div className={`border-t ${isSystemAdmin ? "border-sky-100" : "border-slate-200"} py-3 ${collapsed ? "px-2" : "px-3"}`}>
+      <div className={`shrink-0 border-t ${isSystemAdmin ? "border-sky-100" : "border-slate-200"} py-3 ${collapsed ? "px-2" : "px-3"}`}>
         <ul className="space-y-1">
           {bottomMenu.map((item) => {
             const isActive = currentPage === item.key;
@@ -221,7 +221,7 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
                 <button
                   type="button"
                   onClick={() => onNavigate(item.key)}
-                  className={`w-full rounded-lg py-2 transition-all duration-200 ${collapsed ? "px-2 text-center" : "px-3 text-left"} ${
+                  className={`w-full min-h-[40px] rounded-lg py-2 transition-all duration-200 ${collapsed ? "px-2 text-center" : "px-3 text-left"} ${
                     isActive
                       ? isSystemAdmin
                         ? "bg-sky-100 text-sky-900 ring-1 ring-sky-300"
