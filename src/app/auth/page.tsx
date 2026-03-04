@@ -98,11 +98,11 @@ export default function AuthPage() {
           }}
         >
           <div className="absolute inset-0 flex flex-col justify-end p-8 text-white">
-            <p className="text-xs uppercase tracking-[0.2em] text-sky-100">{mode === "login" ? "Secure Access" : "New Organization"}</p>
-            <h2 className="mt-2 text-3xl font-semibold leading-tight">PulseForge Admin Workspace</h2>
+            <p className="text-xs uppercase tracking-[0.2em] text-sky-100">{mode === "login" ? "" : "New Organization"}</p>
+            <h2 className="mt-2 text-3xl font-semibold leading-tight">PulseForge ideal  Workspace</h2>
             <p className="mt-3 max-w-md text-sm text-slate-200">
               {mode === "login"
-                ? "Sign in to continue managing projects, analytics, and tenant operations."
+                ? "Sign in to continue managing projects, analytics and tenant operations."
                 : "Register your organization with logo branding and start onboarding your team."}
             </p>
           </div>
@@ -140,7 +140,7 @@ export default function AuthPage() {
                   value={tenantSlug}
                   onChange={(event) => setTenantSlug(event.target.value)}
                   required
-                  placeholder="acme"
+                  placeholder="WikipA-LC"
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
                 />
 
@@ -150,7 +150,7 @@ export default function AuthPage() {
                   value={tenantName}
                   onChange={(event) => setTenantName(event.target.value)}
                   required
-                  placeholder="Acme Incorporated"
+                  placeholder="WikipA-LC"
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
                 />
 

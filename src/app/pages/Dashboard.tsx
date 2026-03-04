@@ -323,6 +323,8 @@ export default function Dashboard() {
         isSystemAdmin={isSystemAdmin}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+        orgName={user?.tenantName || (isSystemAdmin ? "System Admin" : "Organization")}
+        orgLogoUrl={user?.tenantLogoUrl || ""}
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <Nav

@@ -134,9 +134,11 @@ type SidebarProps = {
   isSystemAdmin: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  orgName?: string;
+  orgLogoUrl?: string;
 };
 
-export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapsed, onToggleCollapse }: SidebarProps) {
+export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapsed, onToggleCollapse, orgName, orgLogoUrl }: SidebarProps) {
   const visibleMenu =
     role === "system_admin"
       ? menu.filter((item) => item.key === "dashboard" || item.key === "analytics" || item.key === "calendar" || item.key === "admin")
@@ -182,6 +184,9 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
     return fallback;
   }
 
+  const headerOrgName = (orgName || "").trim() || (role === "system_admin" ? "System Admin" : "Organization");
+  const orgInitial = headerOrgName.slice(0, 1).toUpperCase();
+
   return (
     <aside
       className={`hidden min-h-0 flex-col overflow-hidden border-r border-slate-200 transition-[width] duration-300 ease-in-out md:sticky md:top-0 md:flex md:h-dvh md:shrink-0 ${collapsed ? "w-20" : "w-72"} ${
@@ -189,7 +194,19 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
       }`}
     >
       <div className={`shrink-0 py-3 ${collapsed ? "px-2" : "px-4"} ${isSystemAdmin ? "bg-sky-50/70" : ""}`}>
-        <div className="flex items-center justify-between">
+        <div className={`flex ${collapsed ? "justify-center" : "items-center justify-between"} gap-2`}>
+          {!collapsed ? (
+            <div className="flex min-w-0 items-center gap-2">
+              {orgLogoUrl ? (
+                <img src={orgLogoUrl} alt={`${headerOrgName} logo`} className="h-8 w-8 rounded-md border border-slate-200 object-cover" />
+              ) : (
+                <span className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold ${isSystemAdmin ? "bg-sky-100 text-sky-800" : "bg-slate-100 text-slate-700"}`}>
+                  {orgInitial || "O"}
+                </span>
+              )}
+              <p className={`truncate text-sm font-semibold ${isSystemAdmin ? "text-sky-800" : "text-slate-800"}`}>{headerOrgName}</p>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={onToggleCollapse}
@@ -202,7 +219,6 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
               <path d="M15 18l-6-6 6-6" />
             </svg>
           </button>
-          <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${isSystemAdmin ? "text-sky-700" : "text-slate-500"} ${collapsed ? "sr-only" : ""}`}>PulseForge</p>
         </div>
       </div>
 
