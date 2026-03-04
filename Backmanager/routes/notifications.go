@@ -79,6 +79,9 @@ func (s *Service) ListNotifications(c *gin.Context) {
 
 	summary, err := s.loadReminderSummary(c.Request.Context(), tenantID, recipient)
 	if err == nil {
+		s.maybeDispatchScheduledReminder(c.Request.Context(), tenantID, recipient, summary)
+	}
+	if err == nil {
 		items = append([]notificationItem{{
 			ID:             "summary-" + strconv.FormatInt(time.Now().UTC().Unix(), 10),
 			TenantID:       tenantID,
@@ -246,4 +249,95 @@ func uniqueEmails(items []string) []string {
 		out = append(out, v)
 	}
 	return out
+}
+
+func (s *Service) maybeDispatchScheduledReminder(ctx context.Context, tenantID, recipient string, summary reminderSummary) {
+	var (
+		timezone         string
+		frequency        string
+		reminderDaysRaw  []byte
+		reminderTime     string
+		remindersEnabled bool
+		lastSentAt       *time.Time
+	)
+	err := s.DB.QueryRow(ctx, `
+		SELECT timezone, reminder_frequency, reminder_days, reminder_time, reminders_enabled, last_reminder_sent_at
+		FROM user_settings
+		WHERE tenant_id = $1 AND lower(user_email) = lower($2)
+	`, tenantID, recipient).Scan(&timezone, &frequency, &reminderDaysRaw, &reminderTime, &remindersEnabled, &lastSentAt)
+	if err != nil || !remindersEnabled {
+		return
+	}
+
+	days := parseStringArrayJSON(reminderDaysRaw)
+	loc := time.UTC
+	if tz := strings.TrimSpace(timezone); tz != "" {
+		if loaded, err := time.LoadLocation(tz); err == nil {
+			loc = loaded
+		}
+	}
+	now := time.Now().In(loc)
+	targetTime, err := time.Parse("15:04", strings.TrimSpace(reminderTime))
+	if err != nil {
+		targetTime, _ = time.Parse("15:04", "09:00")
+	}
+	dueClock := time.Date(now.Year(), now.Month(), now.Day(), targetTime.Hour(), targetTime.Minute(), 0, 0, loc)
+	if now.Before(dueClock) {
+		return
+	}
+	if lastSentAt != nil {
+		lastLocal := lastSentAt.In(loc)
+		if lastLocal.Year() == now.Year() && lastLocal.Month() == now.Month() && lastLocal.Day() == now.Day() {
+			return
+		}
+	}
+
+	todayWeekday := strings.ToLower(now.Weekday().String())
+	shouldSend := false
+	switch strings.ToLower(strings.TrimSpace(frequency)) {
+	case "daily":
+		shouldSend = true
+	case "weekly":
+		for _, d := range days {
+			if strings.ToLower(strings.TrimSpace(d)) == todayWeekday {
+				shouldSend = true
+				break
+			}
+		}
+	case "custom":
+		for _, d := range days {
+			if strings.ToLower(strings.TrimSpace(d)) == todayWeekday {
+				shouldSend = true
+				break
+			}
+		}
+	default:
+		shouldSend = true
+	}
+	if !shouldSend {
+		return
+	}
+
+	subject := "PulseForge reminder: pending work summary"
+	message := "Hello,\n\nThis is your scheduled reminder.\n\n" +
+		"Pending projects: " + strconv.FormatInt(summary.PendingProjects, 10) + "\n" +
+		"Assigned pending projects: " + strconv.FormatInt(summary.AssignedPendingProjects, 10) + "\n" +
+		"Overdue projects: " + strconv.FormatInt(summary.OverdueProjects, 10) + "\n" +
+		"Open tasks: " + strconv.FormatInt(summary.OpenTasks, 10) + "\n\n" +
+		"Please review and close outstanding work items."
+
+	if err := s.sendMail(context.Background(), recipient, subject, message); err != nil {
+		return
+	}
+	_ = s.createInAppNotification(ctx, tenantID, []string{recipient}, "summary", "Scheduled reminder", "A scheduled summary reminder has been sent to your email.", map[string]any{
+		"pending_projects":          summary.PendingProjects,
+		"assigned_pending_projects": summary.AssignedPendingProjects,
+		"overdue_projects":          summary.OverdueProjects,
+		"open_tasks":                summary.OpenTasks,
+	})
+	_, _ = s.DB.Exec(ctx, `
+		UPDATE user_settings
+		SET last_reminder_sent_at = NOW(), updated_at = NOW()
+		WHERE tenant_id = $1 AND lower(user_email) = lower($2)
+	`, tenantID, recipient)
 }

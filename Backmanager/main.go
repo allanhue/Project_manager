@@ -70,6 +70,10 @@ func main() {
 	api.Use(routes.AuthMiddleware(svc.JWTSecret, svc.JWTIssuer), svc.AuditLogMiddleware())
 	{
 		api.GET("/users", svc.ListUsers)
+		api.GET("/settings", svc.GetUserSettings)
+		api.PUT("/settings", svc.UpdateUserSettings)
+		api.GET("/profile", svc.GetUserProfile)
+		api.PUT("/profile", svc.UpdateUserProfile)
 		api.GET("/projects", svc.ListProjects)
 		api.POST("/projects", svc.CreateProject)
 		api.GET("/tasks", svc.ListTasks)

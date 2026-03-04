@@ -173,6 +173,42 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			ON notifications (tenant_id, recipient_email, created_at DESC);
 		CREATE INDEX IF NOT EXISTS idx_notifications_unread
 			ON notifications (tenant_id, recipient_email, read_at);
+
+		CREATE TABLE IF NOT EXISTS user_settings (
+			id BIGSERIAL PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			user_email TEXT NOT NULL,
+			timezone TEXT NOT NULL DEFAULT 'UTC',
+			week_starts_on TEXT NOT NULL DEFAULT 'monday',
+			reminder_frequency TEXT NOT NULL DEFAULT 'daily',
+			reminder_days JSONB NOT NULL DEFAULT '[]'::jsonb,
+			reminder_time TEXT NOT NULL DEFAULT '09:00',
+			reminders_enabled BOOLEAN NOT NULL DEFAULT true,
+			daily_digest BOOLEAN NOT NULL DEFAULT true,
+			overdue_alerts BOOLEAN NOT NULL DEFAULT true,
+			email_summaries BOOLEAN NOT NULL DEFAULT true,
+			private_projects BOOLEAN NOT NULL DEFAULT true,
+			log_retention_days INT NOT NULL DEFAULT 180,
+			admins_can_export BOOLEAN NOT NULL DEFAULT true,
+			last_reminder_sent_at TIMESTAMPTZ,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (tenant_id, user_email)
+		);
+		CREATE INDEX IF NOT EXISTS idx_user_settings_tenant_user ON user_settings (tenant_id, user_email);
+
+		CREATE TABLE IF NOT EXISTS user_profiles (
+			id BIGSERIAL PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			user_email TEXT NOT NULL,
+			display_name TEXT NOT NULL DEFAULT '',
+			phone TEXT NOT NULL DEFAULT '',
+			organization_name TEXT NOT NULL DEFAULT '',
+			town TEXT NOT NULL DEFAULT '',
+			logo_url TEXT NOT NULL DEFAULT '',
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (tenant_id, user_email)
+		);
+		CREATE INDEX IF NOT EXISTS idx_user_profiles_tenant_user ON user_profiles (tenant_id, user_email);
 	`)
 	return err
 }
