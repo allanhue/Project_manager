@@ -1,4 +1,7 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { listProjects, Project } from "../auth/auth";
 
 type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
 
@@ -132,6 +135,33 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
     role === "system_admin"
       ? menu.filter((item) => item.key === "settings")
       : menu.filter((item) => item.key === "profile" || item.key === "settings");
+  const [ongoingProjects, setOngoingProjects] = useState<Project[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    if (role !== "org_admin") return () => { mounted = false; };
+    (async () => {
+      try {
+        const projects = await listProjects();
+        if (!mounted) return;
+        setOngoingProjects(projects);
+      } catch {
+        if (!mounted) return;
+        setOngoingProjects([]);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [role]);
+
+  const quickProjects = useMemo(() => {
+    const activeItems = ongoingProjects.filter((item) => {
+      const status = item.status.trim().toLowerCase();
+      return status !== "done" && status !== "completed" && status !== "closed";
+    });
+    return activeItems.slice(0, 5);
+  }, [ongoingProjects]);
 
   function displayLabel(key: PageKey, fallback: string) {
     if (role !== "system_admin") return fallback;
@@ -199,6 +229,36 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
           })}
         </ul>
       </nav>
+
+      {!collapsed && role === "org_admin" ? (
+        <section className="shrink-0 border-t border-slate-200 px-3 py-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Ongoing Projects</p>
+            <button
+              type="button"
+              onClick={() => onNavigate("projects")}
+              className="text-[11px] font-medium text-sky-700 hover:text-sky-800"
+            >
+              View
+            </button>
+          </div>
+          <div className="max-h-32 space-y-1 overflow-y-auto pr-1">
+            {quickProjects.length === 0 ? <p className="rounded-md bg-slate-50 px-2 py-2 text-xs text-slate-500">No active projects.</p> : null}
+            {quickProjects.map((project) => (
+              <button
+                key={`quick-project-${project.id}`}
+                type="button"
+                onClick={() => onNavigate("projects")}
+                className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-left hover:bg-slate-50"
+                title={project.name}
+              >
+                <p className="truncate text-xs font-medium text-slate-800">{project.name}</p>
+                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500">{project.status || "active"}</p>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className={`shrink-0 border-t ${isSystemAdmin ? "border-sky-100" : "border-slate-200"} py-3 ${collapsed ? "px-2" : "px-3"}`}>
         <ul className="space-y-1">
