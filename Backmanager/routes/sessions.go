@@ -33,6 +33,8 @@ func (s *Service) ListSessions(c *gin.Context) {
 		FROM users u
 		JOIN tenants t ON t.id = u.tenant_id
 		WHERE t.slug = $1
+		  AND u.last_login_at IS NOT NULL
+		  AND u.last_login_at >= NOW() - INTERVAL '24 hours'
 		ORDER BY u.last_login_at DESC NULLS LAST, u.created_at DESC
 	`, tenantSlug)
 	if err != nil {

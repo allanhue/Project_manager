@@ -391,7 +391,10 @@ export default function SettingsPage() {
 
               <article className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <h4 className="text-sm font-semibold text-slate-900">Sessions Edit</h4>
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-900">Sessions Edit</h4>
+                    <p className="text-[11px] text-slate-500">Shows only active logins (last 24h) using your organization credentials.</p>
+                  </div>
                   <button type="button" onClick={() => void loadSessionsData()} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100">
                     Refresh
                   </button>
