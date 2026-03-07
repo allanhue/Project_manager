@@ -254,7 +254,13 @@ func (s *Service) Login(c *gin.Context) {
 		}
 	}
 
-	_, _ = s.DB.Exec(c.Request.Context(), `UPDATE users SET last_login_at = NOW() WHERE id = $1`, userID)
+	userAgent := strings.TrimSpace(c.GetHeader("User-Agent"))
+	clientIP := strings.TrimSpace(c.ClientIP())
+	_, _ = s.DB.Exec(c.Request.Context(), `
+		UPDATE users
+		SET last_login_at = NOW(), last_login_user_agent = $2, last_login_ip = $3
+		WHERE id = $1
+	`, userID, userAgent, clientIP)
 
 	token, err := s.issueToken(userPublicID, tenantSlug, req.Email, name, tenantName, tenantLogo, role)
 	if err != nil {

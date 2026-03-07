@@ -15,6 +15,8 @@ type sessionItem struct {
 	Role        string     `json:"role"`
 	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
 	Blocked     bool       `json:"blocked"`
+	DeviceLabel string     `json:"device_label"`
+	IP          string     `json:"ip"`
 }
 
 type sessionActionRequest struct {
@@ -29,7 +31,15 @@ func (s *Service) ListSessions(c *gin.Context) {
 	}
 	tenantSlug := strings.TrimSpace(tenantFromContext(c))
 	rows, err := s.DB.Query(c.Request.Context(), `
-		SELECT COALESCE(u.public_id, ''), u.name, lower(u.email), COALESCE(u.role, 'org_admin'), u.last_login_at, COALESCE(u.blocked, false)
+		SELECT
+			COALESCE(u.public_id, ''),
+			u.name,
+			lower(u.email),
+			COALESCE(u.role, 'org_admin'),
+			u.last_login_at,
+			COALESCE(u.blocked, false),
+			COALESCE(u.last_login_user_agent, ''),
+			COALESCE(u.last_login_ip, '')
 		FROM users u
 		JOIN tenants t ON t.id = u.tenant_id
 		WHERE t.slug = $1
@@ -46,13 +56,51 @@ func (s *Service) ListSessions(c *gin.Context) {
 	items := make([]sessionItem, 0)
 	for rows.Next() {
 		var item sessionItem
-		if err := rows.Scan(&item.UserID, &item.Name, &item.Email, &item.Role, &item.LastLoginAt, &item.Blocked); err != nil {
+		var userAgent string
+		if err := rows.Scan(&item.UserID, &item.Name, &item.Email, &item.Role, &item.LastLoginAt, &item.Blocked, &userAgent, &item.IP); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
 			return
 		}
+		item.DeviceLabel = deriveDeviceLabel(userAgent)
 		items = append(items, item)
 	}
 	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+func deriveDeviceLabel(ua string) string {
+	value := strings.ToLower(strings.TrimSpace(ua))
+	if value == "" {
+		return "Unknown device"
+	}
+	os := "Unknown OS"
+	switch {
+	case strings.Contains(value, "windows"):
+		os = "Windows"
+	case strings.Contains(value, "android"):
+		os = "Android"
+	case strings.Contains(value, "iphone"), strings.Contains(value, "ipad"), strings.Contains(value, "ios"):
+		os = "iOS"
+	case strings.Contains(value, "mac os"), strings.Contains(value, "macintosh"):
+		os = "macOS"
+	case strings.Contains(value, "linux"):
+		os = "Linux"
+	}
+	device := "Desktop"
+	if strings.Contains(value, "mobile") || strings.Contains(value, "iphone") || strings.Contains(value, "android") {
+		device = "Mobile"
+	}
+	browser := "Browser"
+	switch {
+	case strings.Contains(value, "edg/"):
+		browser = "Edge"
+	case strings.Contains(value, "chrome/"):
+		browser = "Chrome"
+	case strings.Contains(value, "firefox/"):
+		browser = "Firefox"
+	case strings.Contains(value, "safari/") && !strings.Contains(value, "chrome/"):
+		browser = "Safari"
+	}
+	return os + " | " + device + " | " + browser
 }
 
 func (s *Service) SessionAction(c *gin.Context) {

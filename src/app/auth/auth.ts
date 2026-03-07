@@ -232,6 +232,8 @@ export type SessionItem = {
   role: string;
   blocked: boolean;
   last_login_at?: string | null;
+  device_label?: string;
+  ip?: string;
 };
 
 export type UserProfile = {

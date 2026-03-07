@@ -68,12 +68,16 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			role TEXT NOT NULL DEFAULT 'org_admin',
 			blocked BOOLEAN NOT NULL DEFAULT false,
 			last_login_at TIMESTAMPTZ,
+			last_login_user_agent TEXT NOT NULL DEFAULT '',
+			last_login_ip TEXT NOT NULL DEFAULT '',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE (tenant_id, email)
 		);
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'org_admin';
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked BOOLEAN NOT NULL DEFAULT false;
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_user_agent TEXT NOT NULL DEFAULT '';
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_ip TEXT NOT NULL DEFAULT '';
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS public_id TEXT;
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_public_id ON users (public_id) WHERE public_id IS NOT NULL;
 

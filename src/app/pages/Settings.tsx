@@ -393,7 +393,7 @@ export default function SettingsPage() {
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div>
                     <h4 className="text-sm font-semibold text-slate-900">Sessions Edit</h4>
-                    <p className="text-[11px] text-slate-500">Shows only active logins (last 24h) using your organization credentials.</p>
+                    <p className="text-[11px] text-slate-500">Shows only active logins (last 24h) from your organization users only.</p>
                   </div>
                   <button type="button" onClick={() => void loadSessionsData()} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100">
                     Refresh
@@ -405,15 +405,17 @@ export default function SettingsPage() {
                     <span>Loading sessions...</span>
                   </div>
                 ) : null}
-                <div className="max-h-72 space-y-2 overflow-auto pr-1">
+                {sessions.length > 5 ? <p className="mb-2 text-[11px] text-slate-500">Showing 5 at a time. Scroll to view all active sessions.</p> : null}
+                <div className="max-h-[26rem] space-y-2 overflow-auto pr-1">
                   {sessions.map((item) => (
                     <div key={item.user_id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-slate-900">{item.name}</p>
                           <p className="text-xs text-slate-600">{item.email}</p>
+                          <p className="text-[11px] text-slate-500">{item.device_label || "Unknown device"}</p>
                           <p className="text-[11px] text-slate-500">
-                            Last login: {item.last_login_at ? new Date(item.last_login_at).toLocaleString() : "Not active"} | {item.blocked ? "Blocked" : "Active"}
+                            Last login: {item.last_login_at ? new Date(item.last_login_at).toLocaleString() : "Not active"} | {item.blocked ? "Blocked" : "Active"}{item.ip ? ` | IP: ${item.ip}` : ""}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
