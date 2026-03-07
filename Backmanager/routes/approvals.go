@@ -2,8 +2,6 @@ package routes
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -311,45 +309,6 @@ func (s *Service) ActionApprovalRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, item)
 }
 
-func (s *Service) ApprovalRespondViaMail(c *gin.Context) {
-	idRaw := strings.TrimSpace(c.Query("id"))
-	if c.Request.Method == http.MethodPost {
-		idRaw = strings.TrimSpace(c.PostForm("id"))
-	}
-	id, err := strconv.ParseInt(idRaw, 10, 64)
-	if err != nil || id <= 0 {
-		c.String(http.StatusBadRequest, "Invalid approval id")
-		return
-	}
-
-	token := strings.TrimSpace(c.Query("token"))
-	action := strings.ToLower(strings.TrimSpace(c.Query("action")))
-	if c.Request.Method == http.MethodPost {
-		token = strings.TrimSpace(c.PostForm("token"))
-		action = strings.ToLower(strings.TrimSpace(c.PostForm("action")))
-	}
-	if token == "" {
-		c.String(http.StatusBadRequest, "Invalid approval response link")
-		return
-	}
-
-	if action == "" {
-		item, statusCode, err := s.loadApprovalForToken(c.Request.Context(), id, token)
-		if err != nil {
-			c.Data(statusCode, "text/html; charset=utf-8", []byte(renderApprovalLandingHTML("Approval link is invalid or expired.", nil, id, token)))
-			return
-		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(renderApprovalLandingHTML("", &item, id, token)))
-		return
-	}
-	if action != "approve" && action != "reject" {
-		c.String(http.StatusBadRequest, "Invalid approval action")
-		return
-	}
-	msg, statusCode := s.handleEmailApprovalDecision(c.Request.Context(), id, token, action)
-	c.Data(statusCode, "text/html; charset=utf-8", []byte(renderApprovalResultHTML(msg, statusCode)))
-}
-
 func (s *Service) listTenantOrgAdminEmails(ctx context.Context, tenantSlug string) ([]string, error) {
 	rows, err := s.DB.Query(ctx, `
 		SELECT lower(u.email)
@@ -375,14 +334,6 @@ func (s *Service) listTenantOrgAdminEmails(ctx context.Context, tenantSlug strin
 	return out, nil
 }
 
-func generateApprovalToken() (string, error) {
-	b := make([]byte, 24)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
-}
-
 func (s *Service) sendApprovalStepEmail(ctx context.Context, item approvalRequestItem) error {
 	if len(item.ApproverEmails) == 0 || item.CurrentStep < 0 || item.CurrentStep >= len(item.ApproverEmails) {
 		return fmt.Errorf("no approver configured for current step")
@@ -404,171 +355,4 @@ func (s *Service) sendApprovalStepEmail(ctx context.Context, item approvalReques
 		return err
 	}
 	return nil
-}
-
-func (s *Service) handleEmailApprovalDecision(ctx context.Context, id int64, token, action string) (string, int) {
-	var item approvalRequestItem
-	var approverEmailsRaw []byte
-	var approvalsRaw []byte
-	var responseToken string
-	err := s.DB.QueryRow(ctx, `
-		SELECT id, tenant_id, project_id, project_name, billable_hours::float8, requested_by_email, COALESCE(note, ''), status, approval_mode,
-		       COALESCE(approver_emails, '[]'::jsonb), current_step, required_approvals, COALESCE(approvals, '[]'::jsonb), response_token, created_at, updated_at
-		FROM approval_requests
-		WHERE id = $1
-		LIMIT 1
-	`, id).Scan(
-		&item.ID, &item.TenantID, &item.ProjectID, &item.ProjectName, &item.BillableHours, &item.RequestedByEmail,
-		&item.Note, &item.Status, &item.ApprovalMode, &approverEmailsRaw, &item.CurrentStep, &item.RequiredApprovals, &approvalsRaw, &responseToken, &item.CreatedAt, &item.UpdatedAt,
-	)
-	if err != nil {
-		return "Approval request not found", http.StatusNotFound
-	}
-	if item.Status != "pending" {
-		return "This approval request is already closed.", http.StatusOK
-	}
-	if strings.TrimSpace(responseToken) == "" || token != responseToken {
-		return "Invalid or expired approval link.", http.StatusUnauthorized
-	}
-	item.ApproverEmails = parseStringArrayJSON(approverEmailsRaw)
-	item.Approvals = parseStringArrayJSON(approvalsRaw)
-	if len(item.ApproverEmails) == 0 || item.CurrentStep < 0 || item.CurrentStep >= len(item.ApproverEmails) {
-		return "Approval routing is not configured correctly.", http.StatusBadRequest
-	}
-	currentApprover := item.ApproverEmails[item.CurrentStep]
-
-	if action == "reject" {
-		if _, err := s.DB.Exec(ctx, `
-			UPDATE approval_requests
-			SET status = 'rejected', response_token = '', updated_at = NOW()
-			WHERE id = $1
-		`, item.ID); err != nil {
-			return "Failed to update approval state.", http.StatusInternalServerError
-		}
-		_ = s.createInAppNotification(ctx, item.TenantID, []string{item.RequestedByEmail}, "approval", "Approval rejected", "A mail approver rejected your request.", map[string]any{"approval_id": item.ID, "project": item.ProjectName})
-		return "Rejected successfully. You can close this page.", http.StatusOK
-	}
-
-	already := false
-	for _, v := range item.Approvals {
-		if strings.EqualFold(strings.TrimSpace(v), currentApprover) {
-			already = true
-			break
-		}
-	}
-	if !already {
-		item.Approvals = append(item.Approvals, currentApprover)
-	}
-	approvalsJSON, _ := json.Marshal(item.Approvals)
-	nextStep := item.CurrentStep + 1
-	if nextStep >= len(item.ApproverEmails) {
-		if _, err := s.DB.Exec(ctx, `
-			UPDATE approval_requests
-			SET status = 'approved', approvals = $1::jsonb, response_token = '', updated_at = NOW()
-			WHERE id = $2
-		`, string(approvalsJSON), item.ID); err != nil {
-			return "Failed to finalize approval.", http.StatusInternalServerError
-		}
-		_ = s.createInAppNotification(ctx, item.TenantID, []string{item.RequestedByEmail}, "approval", "Approval completed", "Your request has been approved via email pipeline.", map[string]any{"approval_id": item.ID, "project": item.ProjectName})
-		return "Approved successfully. Workflow completed.", http.StatusOK
-	}
-
-	nextToken, err := generateApprovalToken()
-	if err != nil {
-		return "Failed to continue approval workflow.", http.StatusInternalServerError
-	}
-	if _, err := s.DB.Exec(ctx, `
-		UPDATE approval_requests
-		SET approvals = $1::jsonb, current_step = $2, response_token = $3, updated_at = NOW()
-		WHERE id = $4
-	`, string(approvalsJSON), nextStep, nextToken, item.ID); err != nil {
-		return "Failed to continue approval workflow.", http.StatusInternalServerError
-	}
-	item.CurrentStep = nextStep
-	item.Approvals = parseStringArrayJSON(approvalsJSON)
-	item.UpdatedAt = time.Now().UTC()
-	if err := s.sendApprovalStepEmail(ctx, item); err != nil {
-		return "Approved but failed to notify next approver by email: " + err.Error(), http.StatusBadGateway
-	}
-	_ = s.createInAppNotification(ctx, item.TenantID, []string{item.RequestedByEmail}, "approval", "Approval progressed", "One approver approved. Workflow moved to next approver by email.", map[string]any{"approval_id": item.ID, "project": item.ProjectName, "step": nextStep + 1})
-	return "Approved and forwarded to next approver.", http.StatusOK
-}
-
-func (s *Service) loadApprovalForToken(ctx context.Context, id int64, token string) (approvalRequestItem, int, error) {
-	var item approvalRequestItem
-	var approverEmailsRaw []byte
-	var approvalsRaw []byte
-	var responseToken string
-	err := s.DB.QueryRow(ctx, `
-		SELECT id, tenant_id, project_id, project_name, billable_hours::float8, requested_by_email, COALESCE(note, ''), status, approval_mode,
-		       COALESCE(approver_emails, '[]'::jsonb), current_step, required_approvals, COALESCE(approvals, '[]'::jsonb), response_token, created_at, updated_at
-		FROM approval_requests
-		WHERE id = $1
-		LIMIT 1
-	`, id).Scan(
-		&item.ID, &item.TenantID, &item.ProjectID, &item.ProjectName, &item.BillableHours, &item.RequestedByEmail,
-		&item.Note, &item.Status, &item.ApprovalMode, &approverEmailsRaw, &item.CurrentStep, &item.RequiredApprovals, &approvalsRaw, &responseToken, &item.CreatedAt, &item.UpdatedAt,
-	)
-	if err != nil {
-		return approvalRequestItem{}, http.StatusNotFound, err
-	}
-	if strings.TrimSpace(responseToken) == "" || token != responseToken {
-		return approvalRequestItem{}, http.StatusUnauthorized, fmt.Errorf("invalid token")
-	}
-	item.ApproverEmails = parseStringArrayJSON(approverEmailsRaw)
-	item.Approvals = parseStringArrayJSON(approvalsRaw)
-	return item, http.StatusOK, nil
-}
-
-func renderApprovalLandingHTML(errorMsg string, item *approvalRequestItem, id int64, token string) string {
-	if errorMsg != "" {
-		return fmt.Sprintf(`<html><body style="font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;padding:24px"><div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px"><h2 style="margin-top:0;color:#b91c1c">Approval Link Error</h2><p style="color:#475569">%s</p></div></body></html>`, errorMsg)
-	}
-	if item == nil {
-		return `<html><body>Invalid request.</body></html>`
-	}
-	return fmt.Sprintf(`
-<html>
-  <body style="font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a">
-    <div style="max-width:720px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px">
-      <h2 style="margin:0 0 8px">Approval Review</h2>
-      <p style="margin:0 0 14px;color:#475569">Review request details, then choose Approve or Reject.</p>
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;line-height:1.7">
-        <div><b>Tenant:</b> %s</div>
-        <div><b>Project:</b> %s</div>
-        <div><b>Billable Hours:</b> %.2f</div>
-        <div><b>Requested By:</b> %s</div>
-        <div><b>Pipeline:</b> %s</div>
-        <div><b>Step:</b> %d of %d</div>
-        <div><b>Note:</b> %s</div>
-      </div>
-      <form method="POST" action="/api/v1/approvals/respond" style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
-        <input type="hidden" name="id" value="%d"/>
-        <input type="hidden" name="token" value="%s"/>
-        <button name="action" value="approve" style="border:0;border-radius:8px;background:#059669;color:#fff;padding:10px 14px;font-weight:600;cursor:pointer">Approve</button>
-        <button name="action" value="reject" style="border:0;border-radius:8px;background:#dc2626;color:#fff;padding:10px 14px;font-weight:600;cursor:pointer">Reject</button>
-      </form>
-      <p style="margin-top:12px;font-size:12px;color:#64748b">This token is single-use per approval step.</p>
-    </div>
-  </body>
-</html>`,
-		item.TenantID,
-		item.ProjectName,
-		item.BillableHours,
-		item.RequestedByEmail,
-		strings.ReplaceAll(item.ApprovalMode, "_", " "),
-		item.CurrentStep+1,
-		item.RequiredApprovals,
-		item.Note,
-		id,
-		token,
-	)
-}
-
-func renderApprovalResultHTML(message string, statusCode int) string {
-	color := "#0f172a"
-	if statusCode >= 400 {
-		color = "#b91c1c"
-	}
-	return fmt.Sprintf(`<html><body style="font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;padding:24px"><div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px"><h2 style="margin-top:0;color:%s">Approval Response</h2><p style="color:#475569">%s</p><p style="font-size:12px;color:#64748b">You can close this window.</p></div></body></html>`, color, message)
 }

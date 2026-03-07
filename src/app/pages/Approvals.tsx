@@ -34,6 +34,8 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [actingKey, setActingKey] = useState<string>("");
+  const [selectedIDs, setSelectedIDs] = useState<number[]>([]);
 
   const [projectID, setProjectID] = useState("");
   const [hours, setHours] = useState("");
@@ -68,6 +70,9 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
     );
   }, [items, searchQuery]);
 
+  const pendingFiltered = useMemo(() => filteredItems.filter((item) => item.status === "pending"), [filteredItems]);
+  const allPendingSelected = pendingFiltered.length > 0 && pendingFiltered.every((item) => selectedIDs.includes(item.id));
+
   const summary = useMemo(() => {
     const pending = filteredItems.filter((item) => item.status === "pending").length;
     const approved = filteredItems.filter((item) => item.status === "approved").length;
@@ -99,13 +104,37 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
   }
 
   async function onAction(id: number, action: "approve" | "reject") {
+    if (actingKey) return;
+    setActingKey(`${action}-${id}`);
     setStatus(action === "approve" ? "Approving request..." : "Rejecting request...");
     try {
       await actionApprovalRequest({ id, action });
       setStatus(action === "approve" ? "Request approved." : "Request rejected.");
+      setSelectedIDs((prev) => prev.filter((entry) => entry !== id));
       await loadData();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to update approval request.");
+    } finally {
+      setActingKey("");
+    }
+  }
+
+  async function onBulkAction(action: "approve" | "reject") {
+    const targets = pendingFiltered.filter((item) => selectedIDs.includes(item.id)).map((item) => item.id);
+    if (targets.length === 0 || actingKey) return;
+    setActingKey(`bulk-${action}`);
+    setStatus(action === "approve" ? `Approving ${targets.length} request(s)...` : `Rejecting ${targets.length} request(s)...`);
+    try {
+      for (const id of targets) {
+        await actionApprovalRequest({ id, action });
+      }
+      setStatus(action === "approve" ? "Bulk approval completed." : "Bulk rejection completed.");
+      setSelectedIDs([]);
+      await loadData();
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Bulk action failed.");
+    } finally {
+      setActingKey("");
     }
   }
 
@@ -184,10 +213,43 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
       </form>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedIDs(allPendingSelected ? [] : pendingFiltered.map((item) => item.id))}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+            >
+              {allPendingSelected ? "Unselect Pending" : "Select Pending"}
+            </button>
+            <span className="text-xs text-slate-500">{selectedIDs.length} selected</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void onBulkAction("approve")}
+              disabled={selectedIDs.length === 0 || !!actingKey}
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {actingKey === "bulk-approve" ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-emerald-300 border-t-emerald-700" /> : null}
+              Bulk Approve
+            </button>
+            <button
+              type="button"
+              onClick={() => void onBulkAction("reject")}
+              disabled={selectedIDs.length === 0 || !!actingKey}
+              className="inline-flex items-center gap-2 rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {actingKey === "bulk-reject" ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-rose-300 border-t-rose-700" /> : null}
+              Bulk Reject
+            </button>
+          </div>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm">
+          <table className="w-full min-w-[1060px] text-left text-sm">
             <thead className="text-slate-500">
               <tr className="border-b border-slate-200">
+                <th className="px-2 py-2 font-medium">Pick</th>
                 <th className="px-2 py-2 font-medium">Project</th>
                 <th className="px-2 py-2 font-medium">Hours</th>
                 <th className="px-2 py-2 font-medium">Pipeline</th>
@@ -201,6 +263,16 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
             <tbody>
               {filteredItems.map((item) => (
                 <tr key={item.id} className="border-b border-slate-100">
+                  <td className="px-2 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIDs.includes(item.id)}
+                      disabled={item.status !== "pending" || !!actingKey}
+                      onChange={(event) =>
+                        setSelectedIDs((prev) => (event.target.checked ? [...prev, item.id] : prev.filter((entry) => entry !== item.id)))
+                      }
+                    />
+                  </td>
                   <td className="px-2 py-3 text-slate-900">{item.project_name || "-"}</td>
                   <td className="px-2 py-3 text-slate-700">{item.billable_hours.toFixed(2)}</td>
                   <td className="px-2 py-3 text-slate-700">{item.approval_mode === "multi_approval" ? "Multi Approval" : "Simple"}</td>
@@ -219,17 +291,19 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
                       <button
                         type="button"
                         onClick={() => void onAction(item.id, "approve")}
-                        disabled={item.status !== "pending"}
-                        className="rounded-lg border border-emerald-300 px-3 py-1 text-xs font-medium text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={item.status !== "pending" || !!actingKey}
+                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-3 py-1 text-xs font-medium text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
+                        {actingKey === `approve-${item.id}` ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-300 border-t-emerald-700" /> : null}
                         Approve
                       </button>
                       <button
                         type="button"
                         onClick={() => void onAction(item.id, "reject")}
-                        disabled={item.status !== "pending"}
-                        className="rounded-lg border border-rose-300 px-3 py-1 text-xs font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={item.status !== "pending" || !!actingKey}
+                        className="inline-flex items-center gap-1 rounded-lg border border-rose-300 px-3 py-1 text-xs font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
+                        {actingKey === `reject-${item.id}` ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-rose-300 border-t-rose-700" /> : null}
                         Reject
                       </button>
                     </div>
@@ -238,7 +312,7 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
               ))}
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td className="px-2 py-3 text-slate-500" colSpan={8}>
+                  <td className="px-2 py-3 text-slate-500" colSpan={9}>
                     No approval requests yet.
                   </td>
                 </tr>

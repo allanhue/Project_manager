@@ -173,17 +173,34 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
           </select>
         </div>
         <div className="relative flex flex-wrap items-center gap-2 md:gap-3">
-          <input
-            type="search"
-            placeholder={searchPlaceholder}
-            value={searchQuery}
-            onChange={(event) => onSearchChange(event.target.value)}
-            className={`w-full min-w-[180px] rounded-lg border px-3 py-2 text-sm outline-none transition md:w-72 ${
-              isSystemAdmin
-                ? "border-sky-200 bg-sky-50 text-slate-900 focus:border-sky-400"
-                : "border-slate-200 bg-slate-50 text-slate-900 focus:border-sky-300 focus:bg-white"
-            }`}
-          />
+          <div className="relative w-full md:w-72">
+            <input
+              type="search"
+              placeholder={searchPlaceholder}
+              value={searchQuery}
+              onChange={(event) => onSearchChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") onSearchChange("");
+              }}
+              autoComplete="off"
+              className={`w-full min-w-[180px] rounded-lg border px-3 py-2 pr-8 text-sm outline-none transition ${
+                isSystemAdmin
+                  ? "border-sky-200 bg-sky-50 text-slate-900 focus:border-sky-400"
+                  : "border-slate-200 bg-slate-50 text-slate-900 focus:border-sky-300 focus:bg-white"
+              }`}
+            />
+            {searchQuery.trim() ? (
+              <button
+                type="button"
+                onClick={() => onSearchChange("")}
+                className="absolute right-2 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Clear search"
+                title="Clear search"
+              >
+                x
+              </button>
+            ) : null}
+          </div>
 
           <div className={`inline-flex items-center gap-2 rounded-xl bg-slate-50 p-1`}>
             <button
