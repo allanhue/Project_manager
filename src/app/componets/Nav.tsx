@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppNotification, NotificationSummary, listNotifications, markNotificationRead, sendSupportRequest } from "../auth/auth";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "approvals" | "forum" | "issues" | "profile" | "settings" | "admin";
 
 const titles: Record<PageKey, string> = {
   dashboard: "Dashboard",
@@ -13,6 +13,7 @@ const titles: Record<PageKey, string> = {
   analytics: "Analytics",
   reports: "Reports",
   calendar: "Calendar",
+  approvals: "Approvals",
   forum: "Forum",
   issues: "Issues",
   profile: "Profile",
@@ -95,8 +96,9 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
           { key: "tasks", label: "Tasks" },
           { key: "timesheets", label: "Timesheets" },
           { key: "analytics", label: "Analytics" },
-          { key: "reports", label: "Reports" },
           { key: "calendar", label: "Calendar" },
+          { key: "approvals", label: "Approvals" },
+          { key: "reports", label: "Reports" },
           { key: "forum", label: "Forum" },
           { key: "issues", label: "Issues" },
           { key: "profile", label: "Profile" },
@@ -136,6 +138,8 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
             ? "Search reports, projects..."
           : currentPage === "calendar"
           ? "Search calendar updates..."
+          : currentPage === "approvals"
+            ? "Search approval requests..."
           : currentPage === "forum"
             ? "Search forum posts..."
             : currentPage === "issues"

@@ -52,9 +52,11 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			slug TEXT NOT NULL UNIQUE,
 			name TEXT NOT NULL,
 			logo_url TEXT NOT NULL DEFAULT '',
+			max_sessions INT NOT NULL DEFAULT 5,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 		ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT NOT NULL DEFAULT '';
+		ALTER TABLE tenants ADD COLUMN IF NOT EXISTS max_sessions INT NOT NULL DEFAULT 5;
 
 		CREATE TABLE IF NOT EXISTS users (
 			id BIGSERIAL PRIMARY KEY,
@@ -64,11 +66,13 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			email TEXT NOT NULL,
 			password_hash TEXT NOT NULL,
 			role TEXT NOT NULL DEFAULT 'org_admin',
+			blocked BOOLEAN NOT NULL DEFAULT false,
 			last_login_at TIMESTAMPTZ,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE (tenant_id, email)
 		);
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'org_admin';
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked BOOLEAN NOT NULL DEFAULT false;
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS public_id TEXT;
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_public_id ON users (public_id) WHERE public_id IS NOT NULL;
@@ -195,10 +199,16 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			private_projects BOOLEAN NOT NULL DEFAULT true,
 			log_retention_days INT NOT NULL DEFAULT 180,
 			admins_can_export BOOLEAN NOT NULL DEFAULT true,
+			approval_pipeline TEXT NOT NULL DEFAULT 'simple',
+			approval_email_notifications BOOLEAN NOT NULL DEFAULT true,
+			approval_approvers JSONB NOT NULL DEFAULT '[]'::jsonb,
 			last_reminder_sent_at TIMESTAMPTZ,
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE (tenant_id, user_email)
 		);
+		ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS approval_pipeline TEXT NOT NULL DEFAULT 'simple';
+		ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS approval_email_notifications BOOLEAN NOT NULL DEFAULT true;
+		ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS approval_approvers JSONB NOT NULL DEFAULT '[]'::jsonb;
 		CREATE INDEX IF NOT EXISTS idx_user_settings_tenant_user ON user_settings (tenant_id, user_email);
 
 		CREATE TABLE IF NOT EXISTS user_profiles (
@@ -214,6 +224,29 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			UNIQUE (tenant_id, user_email)
 		);
 		CREATE INDEX IF NOT EXISTS idx_user_profiles_tenant_user ON user_profiles (tenant_id, user_email);
+
+		CREATE TABLE IF NOT EXISTS approval_requests (
+			id BIGSERIAL PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			project_id BIGINT REFERENCES projects(id) ON DELETE SET NULL,
+			project_name TEXT NOT NULL DEFAULT '',
+			billable_hours NUMERIC(8,2) NOT NULL DEFAULT 0,
+			requested_by_email TEXT NOT NULL,
+			note TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'pending',
+			approval_mode TEXT NOT NULL DEFAULT 'simple',
+			approver_emails JSONB NOT NULL DEFAULT '[]'::jsonb,
+			current_step INT NOT NULL DEFAULT 0,
+			response_token TEXT NOT NULL DEFAULT '',
+			required_approvals INT NOT NULL DEFAULT 1,
+			approvals JSONB NOT NULL DEFAULT '[]'::jsonb,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_approval_requests_tenant_created ON approval_requests (tenant_id, created_at DESC);
+		ALTER TABLE approval_requests ADD COLUMN IF NOT EXISTS approver_emails JSONB NOT NULL DEFAULT '[]'::jsonb;
+		ALTER TABLE approval_requests ADD COLUMN IF NOT EXISTS current_step INT NOT NULL DEFAULT 0;
+		ALTER TABLE approval_requests ADD COLUMN IF NOT EXISTS response_token TEXT NOT NULL DEFAULT '';
 	`)
 	return err
 }

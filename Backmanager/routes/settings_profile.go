@@ -22,6 +22,9 @@ type userSettingsResponse struct {
 	PrivateProjects   bool     `json:"private_projects"`
 	LogRetentionDays  int      `json:"log_retention_days"`
 	AdminsCanExport   bool     `json:"admins_can_export"`
+	ApprovalPipeline  string   `json:"approval_pipeline"`
+	ApprovalEmails    bool     `json:"approval_email_notifications"`
+	ApprovalApprovers []string `json:"approval_approvers"`
 }
 
 type updateUserSettingsRequest struct {
@@ -37,14 +40,19 @@ type updateUserSettingsRequest struct {
 	PrivateProjects   bool     `json:"private_projects"`
 	LogRetentionDays  int      `json:"log_retention_days"`
 	AdminsCanExport   bool     `json:"admins_can_export"`
+	ApprovalPipeline  string   `json:"approval_pipeline"`
+	ApprovalEmails    bool     `json:"approval_email_notifications"`
+	ApprovalApprovers []string `json:"approval_approvers"`
 }
 
 type userProfileResponse struct {
-	DisplayName      string `json:"display_name"`
-	Phone            string `json:"phone"`
-	OrganizationName string `json:"organization_name"`
-	Town             string `json:"town"`
-	LogoURL          string `json:"logo_url"`
+	DisplayName       string `json:"display_name"`
+	Phone             string `json:"phone"`
+	OrganizationName  string `json:"organization_name"`
+	Town              string `json:"town"`
+	LogoURL           string `json:"logo_url"`
+	MaxSessions       int64  `json:"max_sessions"`
+	ActiveSessions24h int64  `json:"active_sessions_24h"`
 }
 
 type updateUserProfileRequest struct {
@@ -74,9 +82,11 @@ func (s *Service) GetUserSettings(c *gin.Context) {
 
 	var out userSettingsResponse
 	var reminderDaysRaw []byte
+	var approversRaw []byte
 	err := s.DB.QueryRow(c.Request.Context(), `
 		SELECT timezone, week_starts_on, reminder_frequency, reminder_days, reminder_time, reminders_enabled,
-		       daily_digest, overdue_alerts, email_summaries, private_projects, log_retention_days, admins_can_export
+		       daily_digest, overdue_alerts, email_summaries, private_projects, log_retention_days, admins_can_export,
+		       COALESCE(approval_pipeline, 'simple'), COALESCE(approval_email_notifications, true), COALESCE(approval_approvers, '[]'::jsonb)
 		FROM user_settings
 		WHERE tenant_id = $1 AND lower(user_email) = lower($2)
 	`, tenantID, email).Scan(
@@ -92,12 +102,16 @@ func (s *Service) GetUserSettings(c *gin.Context) {
 		&out.PrivateProjects,
 		&out.LogRetentionDays,
 		&out.AdminsCanExport,
+		&out.ApprovalPipeline,
+		&out.ApprovalEmails,
+		&approversRaw,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user settings"})
 		return
 	}
 	out.ReminderDays = parseStringArrayJSON(reminderDaysRaw)
+	out.ApprovalApprovers = uniqueEmails(parseStringArrayJSON(approversRaw))
 	if len(out.ReminderDays) == 0 {
 		out.ReminderDays = []string{"monday", "wednesday", "friday"}
 	}
@@ -134,18 +148,32 @@ func (s *Service) UpdateUserSettings(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "reminder_time must be HH:MM"})
 		return
 	}
+	req.ApprovalPipeline = strings.ToLower(strings.TrimSpace(req.ApprovalPipeline))
+	if req.ApprovalPipeline == "" {
+		req.ApprovalPipeline = "simple"
+	}
+	if req.ApprovalPipeline != "simple" && req.ApprovalPipeline != "multi_approval" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "approval_pipeline must be simple or multi_approval"})
+		return
+	}
+	req.ApprovalApprovers = uniqueEmails(req.ApprovalApprovers)
+	if req.ApprovalPipeline == "simple" && len(req.ApprovalApprovers) > 1 {
+		req.ApprovalApprovers = req.ApprovalApprovers[:1]
+	}
 	if req.LogRetentionDays < 1 {
 		req.LogRetentionDays = 1
 	}
 	days := normalizeReminderDays(req.ReminderDays)
 	daysJSON, _ := json.Marshal(days)
+	approversJSON, _ := json.Marshal(uniqueEmails(req.ApprovalApprovers))
 
 	if _, err := s.DB.Exec(c.Request.Context(), `
 		INSERT INTO user_settings (
 			tenant_id, user_email, timezone, week_starts_on, reminder_frequency, reminder_days, reminder_time,
-			reminders_enabled, daily_digest, overdue_alerts, email_summaries, private_projects, log_retention_days, admins_can_export, updated_at
+			reminders_enabled, daily_digest, overdue_alerts, email_summaries, private_projects, log_retention_days, admins_can_export,
+			approval_pipeline, approval_email_notifications, approval_approvers, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+		VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, NOW())
 		ON CONFLICT (tenant_id, user_email) DO UPDATE SET
 			timezone = EXCLUDED.timezone,
 			week_starts_on = EXCLUDED.week_starts_on,
@@ -159,10 +187,13 @@ func (s *Service) UpdateUserSettings(c *gin.Context) {
 			private_projects = EXCLUDED.private_projects,
 			log_retention_days = EXCLUDED.log_retention_days,
 			admins_can_export = EXCLUDED.admins_can_export,
+			approval_pipeline = EXCLUDED.approval_pipeline,
+			approval_email_notifications = EXCLUDED.approval_email_notifications,
+			approval_approvers = EXCLUDED.approval_approvers,
 			updated_at = NOW()
 	`, tenantID, email, strings.TrimSpace(req.Timezone), strings.TrimSpace(req.WeekStartsOn), strings.TrimSpace(req.ReminderFrequency), string(daysJSON),
 		strings.TrimSpace(req.ReminderTime), req.RemindersEnabled, req.DailyDigest, req.OverdueAlerts, req.EmailSummaries, req.PrivateProjects,
-		req.LogRetentionDays, req.AdminsCanExport); err != nil {
+		req.LogRetentionDays, req.AdminsCanExport, req.ApprovalPipeline, req.ApprovalEmails, string(approversJSON)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save settings"})
 		return
 	}
@@ -195,6 +226,18 @@ func (s *Service) GetUserProfile(c *gin.Context) {
 	`, tenantID, email).Scan(&out.DisplayName, &out.Phone, &out.OrganizationName, &out.Town, &out.LogoURL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load profile"})
+		return
+	}
+
+	if err := s.DB.QueryRow(c.Request.Context(), `
+		SELECT
+			COALESCE(t.max_sessions, 5),
+			(SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND u.last_login_at >= NOW() - INTERVAL '24 hours')
+		FROM tenants t
+		WHERE t.slug = $1
+		LIMIT 1
+	`, tenantID).Scan(&out.MaxSessions, &out.ActiveSessions24h); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load session usage"})
 		return
 	}
 	c.JSON(http.StatusOK, out)

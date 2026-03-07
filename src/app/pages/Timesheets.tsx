@@ -197,8 +197,8 @@ export default function TimesheetsPage({ searchQuery = "" }: TimesheetsPageProps
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Work Type</label>
                 <select value={billable ? "billable" : "non_billable"} onChange={(event) => setBillable(event.target.value === "billable")} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300">
-                  <option value="billable">billable</option>
-                  <option value="non_billable">non_billable</option>
+                  <option value="billable">Billable</option>
+                  <option value="non_billable">Non Billable</option>
                 </select>
               </div>
               <div className="md:col-span-2">

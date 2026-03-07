@@ -14,7 +14,7 @@ export type AuthSession = {
 };
 
 const SESSION_KEY = "pulseforge_session";
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 type RegisterInput = {
   tenantSlug: string;
@@ -88,6 +88,8 @@ export type SystemOrganization = {
   tenant_slug: string;
   tenant_name: string;
   logo_url: string;
+  max_sessions?: number;
+  active_sessions_24h?: number;
   user_count: number;
   project_count: number;
   task_count: number;
@@ -123,6 +125,8 @@ export type SystemTenant = {
   slug: string;
   name: string;
   logo_url: string;
+  max_sessions?: number;
+  active_sessions_24h?: number;
   created_at: string;
 };
 
@@ -131,6 +135,7 @@ export type TenantUser = {
   name: string;
   email: string;
   role: string;
+  blocked?: boolean;
 };
 
 export type ForumPost = {
@@ -197,6 +202,36 @@ export type UserSettings = {
   private_projects: boolean;
   log_retention_days: number;
   admins_can_export: boolean;
+  approval_pipeline: "simple" | "multi_approval";
+  approval_email_notifications: boolean;
+  approval_approvers: string[];
+};
+
+export type ApprovalRequest = {
+  id: number;
+  tenant_id: string;
+  project_id?: number | null;
+  project_name: string;
+  billable_hours: number;
+  requested_by_email: string;
+  note: string;
+  status: "pending" | "approved" | "rejected" | string;
+  approval_mode: "simple" | "multi_approval" | string;
+  approver_emails?: string[];
+  current_step?: number;
+  required_approvals: number;
+  approvals: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type SessionItem = {
+  user_id: string;
+  name: string;
+  email: string;
+  role: string;
+  blocked: boolean;
+  last_login_at?: string | null;
 };
 
 export type UserProfile = {
@@ -205,6 +240,8 @@ export type UserProfile = {
   organization_name: string;
   town: string;
   logo_url: string;
+  max_sessions?: number;
+  active_sessions_24h?: number;
 };
 
 function parseJwtClaims(token: string): Record<string, unknown> {
@@ -542,6 +579,73 @@ export async function listUsers(): Promise<TenantUser[]> {
   return payload.items || [];
 }
 
+export async function listSessions(): Promise<SessionItem[]> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: SessionItem[] }>("/api/v1/sessions", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return payload.items || [];
+}
+
+export async function updateSessionAction(input: { user_id: string; action: "terminate" | "block" | "unblock" }): Promise<{ status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ status: string }>(`/api/v1/sessions/${input.user_id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ action: input.action }),
+  });
+}
+
+export async function listApprovalRequests(): Promise<ApprovalRequest[]> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: ApprovalRequest[] }>("/api/v1/approvals/requests", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return payload.items || [];
+}
+
+export async function createApprovalRequest(input: {
+  project_id?: number | null;
+  note?: string;
+  hours?: number;
+}): Promise<ApprovalRequest> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<ApprovalRequest>("/api/v1/approvals/requests", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      project_id: input.project_id ?? null,
+      note: input.note || "",
+      hours: input.hours || 0,
+    }),
+  });
+}
+
+export async function actionApprovalRequest(input: { id: number; action: "approve" | "reject" }): Promise<ApprovalRequest> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<ApprovalRequest>(`/api/v1/approvals/requests/${input.id}/action`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ action: input.action }),
+  });
+}
+
 export async function listForumPosts(): Promise<ForumPost[]> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
@@ -688,6 +792,7 @@ export async function createSystemTenant(input: {
   slug: string;
   name: string;
   logo_data?: string;
+  max_sessions?: number;
   org_admin_email?: string;
   org_admin_password?: string;
 }): Promise<SystemTenant> {
@@ -702,13 +807,14 @@ export async function createSystemTenant(input: {
     body: JSON.stringify({
       ...input,
       logo_data: input.logo_data || "",
+      max_sessions: input.max_sessions || 5,
       org_admin_email: input.org_admin_email || "",
       org_admin_password: input.org_admin_password || "",
     }),
   });
 }
 
-export async function updateSystemTenant(input: { id: number; slug: string; name: string; logo_data?: string }): Promise<SystemTenant> {
+export async function updateSystemTenant(input: { id: number; slug: string; name: string; logo_data?: string; max_sessions?: number }): Promise<SystemTenant> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
   return requestJSON<SystemTenant>(`/api/v1/system/tenants/${input.id}`, {
@@ -717,7 +823,7 @@ export async function updateSystemTenant(input: { id: number; slug: string; name
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ slug: input.slug, name: input.name, logo_data: input.logo_data || "" }),
+    body: JSON.stringify({ slug: input.slug, name: input.name, logo_data: input.logo_data || "", max_sessions: input.max_sessions || 5 }),
   });
 }
 

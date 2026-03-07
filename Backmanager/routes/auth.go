@@ -3,6 +3,7 @@ package routes
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"errors"
 	"fmt"
 	"math/big"
@@ -186,23 +187,26 @@ func (s *Service) Login(c *gin.Context) {
 	var tenantSlug string
 	var tenantName string
 	var tenantLogo string
+	var maxSessions int64
+	var blocked bool
+	var lastLoginAt sql.NullTime
 	var err error
 	if req.TenantSlug != "" {
 		err = s.DB.QueryRow(c.Request.Context(), `
-			SELECT u.id, u.public_id, u.password_hash, u.role, u.name, t.slug, t.name, t.logo_url
+			SELECT u.id, u.public_id, u.password_hash, u.role, u.name, t.slug, t.name, t.logo_url, COALESCE(t.max_sessions, 5), COALESCE(u.blocked, false), u.last_login_at
 			FROM users u
 			JOIN tenants t ON t.id = u.tenant_id
 			WHERE t.slug = $1 AND lower(u.email) = lower($2)
-		`, req.TenantSlug, req.Email).Scan(&userID, &userPublicID, &hash, &role, &name, &tenantSlug, &tenantName, &tenantLogo)
+		`, req.TenantSlug, req.Email).Scan(&userID, &userPublicID, &hash, &role, &name, &tenantSlug, &tenantName, &tenantLogo, &maxSessions, &blocked, &lastLoginAt)
 	} else {
 		err = s.DB.QueryRow(c.Request.Context(), `
-			SELECT u.id, u.public_id, u.password_hash, u.role, u.name, t.slug, t.name, t.logo_url
+			SELECT u.id, u.public_id, u.password_hash, u.role, u.name, t.slug, t.name, t.logo_url, COALESCE(t.max_sessions, 5), COALESCE(u.blocked, false), u.last_login_at
 			FROM users u
 			JOIN tenants t ON t.id = u.tenant_id
 			WHERE lower(u.email) = lower($1)
 			ORDER BY u.id DESC
 			LIMIT 1
-		`, req.Email).Scan(&userID, &userPublicID, &hash, &role, &name, &tenantSlug, &tenantName, &tenantLogo)
+		`, req.Email).Scan(&userID, &userPublicID, &hash, &role, &name, &tenantSlug, &tenantName, &tenantLogo, &maxSessions, &blocked, &lastLoginAt)
 	}
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
@@ -223,6 +227,31 @@ func (s *Service) Login(c *gin.Context) {
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
+	}
+	if blocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": "account access is blocked. Contact your organization admin."})
+		return
+	}
+
+	if role != "system_admin" && maxSessions > 0 {
+		isAlreadyActive := lastLoginAt.Valid && lastLoginAt.Time.After(time.Now().Add(-24*time.Hour))
+		if !isAlreadyActive {
+			var activeSessions int64
+			err = s.DB.QueryRow(c.Request.Context(), `
+				SELECT COUNT(*)
+				FROM users u
+				JOIN tenants t ON t.id = u.tenant_id
+				WHERE t.slug = $1 AND u.last_login_at >= NOW() - INTERVAL '24 hours'
+			`, tenantSlug).Scan(&activeSessions)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate organization session limit"})
+				return
+			}
+			if activeSessions >= maxSessions {
+				c.JSON(http.StatusForbidden, gin.H{"error": "organization session limit reached. Contact system admin."})
+				return
+			}
+		}
 	}
 
 	_, _ = s.DB.Exec(c.Request.Context(), `UPDATE users SET last_login_at = NOW() WHERE id = $1`, userID)

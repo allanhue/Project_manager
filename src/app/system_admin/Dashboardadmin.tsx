@@ -153,6 +153,8 @@ export default function DashboardadminPage() {
                 <th className="px-2 py-2 font-medium">Name</th>
                 <th className="px-2 py-2 font-medium">Logo</th>
                 <th className="px-2 py-2 font-medium">Users</th>
+                <th className="px-2 py-2 font-medium">Max Sessions</th>
+                <th className="px-2 py-2 font-medium">Active Sessions (24h)</th>
                 <th className="px-2 py-2 font-medium">Active Users (7d)</th>
                 <th className="px-2 py-2 font-medium">Projects</th>
                 <th className="px-2 py-2 font-medium">Tasks</th>
@@ -169,6 +171,8 @@ export default function DashboardadminPage() {
                     {org.logo_url ? <img src={org.logo_url} alt={`${org.tenant_name} logo`} className="h-8 w-8 rounded-md object-cover" /> : "-"}
                   </td>
                   <td className="px-2 py-3 text-slate-700">{org.user_count}</td>
+                  <td className="px-2 py-3 text-slate-700">{org.max_sessions || 5}</td>
+                  <td className="px-2 py-3 text-slate-700">{org.active_sessions_24h || 0}</td>
                   <td className="px-2 py-3 text-slate-700">{org.active_users_7d}</td>
                   <td className="px-2 py-3 text-slate-700">{org.project_count}</td>
                   <td className="px-2 py-3 text-slate-700">{org.task_count}</td>

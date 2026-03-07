@@ -17,6 +17,8 @@ type organizationSummary struct {
 	TenantSlug        string     `json:"tenant_slug"`
 	TenantName        string     `json:"tenant_name"`
 	LogoURL           string     `json:"logo_url"`
+	MaxSessions       int64      `json:"max_sessions"`
+	ActiveSessions24h int64      `json:"active_sessions_24h"`
 	UserCount         int64      `json:"user_count"`
 	ProjectCount      int64      `json:"project_count"`
 	TaskCount         int64      `json:"task_count"`
@@ -26,11 +28,13 @@ type organizationSummary struct {
 }
 
 type systemTenant struct {
-	ID        int64     `json:"id"`
-	Slug      string    `json:"slug"`
-	Name      string    `json:"name"`
-	LogoURL   string    `json:"logo_url"`
-	CreatedAt time.Time `json:"created_at"`
+	ID                int64     `json:"id"`
+	Slug              string    `json:"slug"`
+	Name              string    `json:"name"`
+	LogoURL           string    `json:"logo_url"`
+	MaxSessions       int64     `json:"max_sessions"`
+	ActiveSessions24h int64     `json:"active_sessions_24h"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 type tenantUpsertRequest struct {
@@ -38,6 +42,7 @@ type tenantUpsertRequest struct {
 	Name             string `json:"name" binding:"required"`
 	LogoData         string `json:"logo_data"`
 	LogoURL          string `json:"logo_url"`
+	MaxSessions      int    `json:"max_sessions"`
 	OrgAdminEmail    string `json:"org_admin_email"`
 	OrgAdminPassword string `json:"org_admin_password"`
 }
@@ -48,6 +53,8 @@ func (s *Service) SystemOrganizations(c *gin.Context) {
 			t.slug,
 			t.name,
 			COALESCE(t.logo_url, '') AS logo_url,
+			COALESCE(t.max_sessions, 5) AS max_sessions,
+			(SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND u.last_login_at >= NOW() - INTERVAL '24 hours') AS active_sessions_24h,
 			(SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id) AS user_count,
 			(SELECT COUNT(*) FROM projects p WHERE p.tenant_id = t.slug) AS project_count,
 			(SELECT COUNT(*) FROM tasks tk WHERE tk.tenant_id = t.slug) AS task_count,
@@ -75,6 +82,8 @@ func (s *Service) SystemOrganizations(c *gin.Context) {
 			&row.TenantSlug,
 			&row.TenantName,
 			&row.LogoURL,
+			&row.MaxSessions,
+			&row.ActiveSessions24h,
 			&row.UserCount,
 			&row.ProjectCount,
 			&row.TaskCount,
@@ -103,8 +112,15 @@ func (s *Service) SystemOrganizations(c *gin.Context) {
 
 func (s *Service) SystemTenants(c *gin.Context) {
 	rows, err := s.DB.Query(c.Request.Context(), `
-		SELECT id, slug, name, COALESCE(logo_url, ''), created_at
-		FROM tenants
+		SELECT
+			t.id,
+			t.slug,
+			t.name,
+			COALESCE(t.logo_url, ''),
+			COALESCE(t.max_sessions, 5),
+			(SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND u.last_login_at >= NOW() - INTERVAL '24 hours') AS active_sessions_24h,
+			t.created_at
+		FROM tenants t
 		ORDER BY created_at DESC
 	`)
 	if err != nil {
@@ -116,7 +132,7 @@ func (s *Service) SystemTenants(c *gin.Context) {
 	items := make([]systemTenant, 0)
 	for rows.Next() {
 		var item systemTenant
-		if err := rows.Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.MaxSessions, &item.ActiveSessions24h, &item.CreatedAt); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
 			return
 		}
@@ -138,6 +154,9 @@ func (s *Service) CreateTenant(c *gin.Context) {
 	req.LogoURL = strings.TrimSpace(req.LogoURL)
 	req.OrgAdminEmail = strings.ToLower(strings.TrimSpace(req.OrgAdminEmail))
 	req.OrgAdminPassword = strings.TrimSpace(req.OrgAdminPassword)
+	if req.MaxSessions <= 0 {
+		req.MaxSessions = 5
+	}
 	logoValue := req.LogoData
 	if logoValue == "" {
 		logoValue = req.LogoURL
@@ -177,10 +196,10 @@ func (s *Service) CreateTenant(c *gin.Context) {
 
 	var item systemTenant
 	err = tx.QueryRow(c.Request.Context(), `
-		INSERT INTO tenants (slug, name, logo_url)
-		VALUES ($1, $2, $3)
-		RETURNING id, slug, name, COALESCE(logo_url, ''), created_at
-	`, req.Slug, req.Name, logoValue).Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.CreatedAt)
+		INSERT INTO tenants (slug, name, logo_url, max_sessions)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, slug, name, COALESCE(logo_url, ''), COALESCE(max_sessions, 5), created_at
+	`, req.Slug, req.Name, logoValue, req.MaxSessions).Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.MaxSessions, &item.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "tenant create failed (slug may already exist)"})
 		return
@@ -236,6 +255,7 @@ func (s *Service) CreateTenant(c *gin.Context) {
 		"slug":              item.Slug,
 		"name":              item.Name,
 		"logo_url":          item.LogoURL,
+		"max_sessions":      item.MaxSessions,
 		"created_at":        item.CreatedAt,
 		"org_admin_created": createdOrgAdmin,
 	})
@@ -257,6 +277,9 @@ func (s *Service) UpdateTenant(c *gin.Context) {
 	req.Name = strings.TrimSpace(req.Name)
 	req.LogoData = strings.TrimSpace(req.LogoData)
 	req.LogoURL = strings.TrimSpace(req.LogoURL)
+	if req.MaxSessions <= 0 {
+		req.MaxSessions = 5
+	}
 	logoValue := req.LogoData
 	if logoValue == "" {
 		logoValue = req.LogoURL
@@ -303,10 +326,10 @@ func (s *Service) UpdateTenant(c *gin.Context) {
 	var item systemTenant
 	err = tx.QueryRow(c.Request.Context(), `
 		UPDATE tenants
-		SET slug = $1, name = $2, logo_url = $3
-		WHERE id = $4
-		RETURNING id, slug, name, COALESCE(logo_url, ''), created_at
-	`, req.Slug, req.Name, logoValue, id).Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.CreatedAt)
+		SET slug = $1, name = $2, logo_url = $3, max_sessions = $4
+		WHERE id = $5
+		RETURNING id, slug, name, COALESCE(logo_url, ''), COALESCE(max_sessions, 5), created_at
+	`, req.Slug, req.Name, logoValue, req.MaxSessions, id).Scan(&item.ID, &item.Slug, &item.Name, &item.LogoURL, &item.MaxSessions, &item.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "tenant update failed (slug may already exist)"})
 		return

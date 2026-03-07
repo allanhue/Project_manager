@@ -1,11 +1,13 @@
 package routes
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 const tenantCtxKey = "tenant_id"
@@ -103,4 +105,36 @@ func emailFromContext(c *gin.Context) string {
 	}
 	email, _ := v.(string)
 	return email
+}
+
+func RequireActiveUser(s *Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tenant := strings.TrimSpace(tenantFromContext(c))
+		email := strings.ToLower(strings.TrimSpace(emailFromContext(c)))
+		if tenant == "" || email == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing user context"})
+			return
+		}
+		var blocked bool
+		err := s.DB.QueryRow(c.Request.Context(), `
+			SELECT COALESCE(u.blocked, false)
+			FROM users u
+			JOIN tenants t ON t.id = u.tenant_id
+			WHERE t.slug = $1 AND lower(u.email) = lower($2)
+			LIMIT 1
+		`, tenant, email).Scan(&blocked)
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to validate access"})
+			return
+		}
+		if blocked {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "account access is blocked"})
+			return
+		}
+		c.Next()
+	}
 }

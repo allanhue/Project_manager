@@ -58,6 +58,7 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+	r.GET("/api/v1/approvals/respond", svc.ApprovalRespondViaMail)
 
 	auth := r.Group("/api/v1/auth")
 	{
@@ -67,9 +68,11 @@ func main() {
 	}
 
 	api := r.Group("/api/v1")
-	api.Use(routes.AuthMiddleware(svc.JWTSecret, svc.JWTIssuer), svc.AuditLogMiddleware())
+	api.Use(routes.AuthMiddleware(svc.JWTSecret, svc.JWTIssuer), routes.RequireActiveUser(svc), svc.AuditLogMiddleware())
 	{
 		api.GET("/users", svc.ListUsers)
+		api.GET("/sessions", svc.ListSessions)
+		api.PUT("/sessions/:id", svc.SessionAction)
 		api.GET("/settings", svc.GetUserSettings)
 		api.PUT("/settings", svc.UpdateUserSettings)
 		api.GET("/profile", svc.GetUserProfile)
@@ -85,6 +88,9 @@ func main() {
 		api.POST("/issues", svc.CreateIssue)
 		api.GET("/timesheets", svc.ListTimesheets)
 		api.POST("/timesheets", svc.CreateTimesheet)
+		api.GET("/approvals/requests", svc.ListApprovalRequests)
+		api.POST("/approvals/requests", svc.CreateApprovalRequest)
+		api.PUT("/approvals/requests/:id/action", svc.ActionApprovalRequest)
 		api.POST("/notifications/test", svc.TestNotification)
 		api.GET("/notifications", svc.ListNotifications)
 		api.PUT("/notifications/:id/read", svc.MarkNotificationRead)

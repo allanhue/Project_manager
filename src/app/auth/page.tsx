@@ -15,6 +15,7 @@ export default function AuthPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotMessage, setForgotMessage] = useState("");
@@ -196,14 +197,37 @@ export default function AuthPage() {
             />
 
             <label className="mt-4 block text-sm font-medium text-slate-700">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              minLength={6}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
-            />
+            <div className="mt-1 flex gap-2">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                minLength={6}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-100"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                title={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="M3 3l18 18" />
+                    <path d="M10.6 10.6A3 3 0 0 0 13.4 13.4" />
+                    <path d="M9.9 5.2A10.7 10.7 0 0 1 12 5c5.7 0 9.5 5.7 9.5 7s-1.2 3.1-3.2 4.6" />
+                    <path d="M6.1 6.1C3.9 7.6 2.5 10.1 2.5 12c0 1.3 3.8 7 9.5 7 1.4 0 2.7-.3 3.8-.9" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="M2.5 12s3.8-7 9.5-7 9.5 5.7 9.5 7-3.8 7-9.5 7-9.5-5.7-9.5-7z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
 
             {mode === "login" ? (
               <button

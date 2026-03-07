@@ -22,6 +22,7 @@ export default function SystemConfigurationPage() {
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
   const [logoData, setLogoData] = useState("");
+  const [maxSessions, setMaxSessions] = useState(5);
   const [orgAdminEmail, setOrgAdminEmail] = useState("");
   const [orgAdminPassword, setOrgAdminPassword] = useState("");
 
@@ -48,6 +49,7 @@ export default function SystemConfigurationPage() {
         slug: computedSlug,
         name: name.trim(),
         logo_data: logoData.trim(),
+        max_sessions: maxSessions,
         org_admin_email: orgAdminEmail.trim().toLowerCase(),
         org_admin_password: orgAdminPassword,
       });
@@ -55,6 +57,7 @@ export default function SystemConfigurationPage() {
       setSlug("");
       setName("");
       setLogoData("");
+      setMaxSessions(5);
       setOrgAdminEmail("");
       setOrgAdminPassword("");
       setShowCreate(false);
@@ -74,12 +77,14 @@ export default function SystemConfigurationPage() {
         slug: slug.trim().toLowerCase(),
         name: name.trim(),
         logo_data: logoData.trim(),
+        max_sessions: maxSessions,
       });
       setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
       setEditing(null);
       setSlug("");
       setName("");
       setLogoData("");
+      setMaxSessions(5);
       setOrgAdminEmail("");
       setOrgAdminPassword("");
       setStatus("Tenant updated.");
@@ -140,6 +145,7 @@ export default function SystemConfigurationPage() {
                 setSlug("");
                 setName("");
                 setLogoData("");
+                setMaxSessions(5);
                 setOrgAdminEmail("");
                 setOrgAdminPassword("");
                 setShowCreate(true);
@@ -159,6 +165,8 @@ export default function SystemConfigurationPage() {
                 <th className="px-2 py-2 font-medium">Org ID (Slug)</th>
                 <th className="px-2 py-2 font-medium">Organization Name</th>
                 <th className="px-2 py-2 font-medium">Logo</th>
+                <th className="px-2 py-2 font-medium">Max Sessions</th>
+                <th className="px-2 py-2 font-medium">Active (24h)</th>
                 <th className="px-2 py-2 font-medium">Created</th>
                 <th className="px-2 py-2 font-medium">Actions</th>
               </tr>
@@ -172,6 +180,8 @@ export default function SystemConfigurationPage() {
                   <td className="px-2 py-3 text-slate-700">
                     {item.logo_url ? <img src={item.logo_url} alt={`${item.name} logo`} className="h-8 w-8 rounded-md object-cover" /> : "-"}
                   </td>
+                  <td className="px-2 py-3 text-slate-700">{item.max_sessions || 5}</td>
+                  <td className="px-2 py-3 text-slate-700">{item.active_sessions_24h || 0}</td>
                   <td className="px-2 py-3 text-slate-700">{new Date(item.created_at).toLocaleString()}</td>
                   <td className="px-2 py-3">
                     <button
@@ -181,6 +191,7 @@ export default function SystemConfigurationPage() {
                         setSlug(item.slug);
                         setName(item.name);
                         setLogoData(item.logo_url || "");
+                        setMaxSessions(item.max_sessions || 5);
                         setOrgAdminEmail("");
                         setOrgAdminPassword("");
                       }}
@@ -221,6 +232,16 @@ export default function SystemConfigurationPage() {
                   value={editing ? slug : slugify(name)}
                   readOnly
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Max Allowed Sessions</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={maxSessions}
+                  onChange={(event) => setMaxSessions(Math.max(1, Number(event.target.value) || 1))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
                 />
               </div>
               {!editing ? (
@@ -278,6 +299,7 @@ export default function SystemConfigurationPage() {
                   setShowCreate(false);
                   setEditing(null);
                   setLogoData("");
+                  setMaxSessions(5);
                   setOrgAdminEmail("");
                   setOrgAdminPassword("");
                 }}

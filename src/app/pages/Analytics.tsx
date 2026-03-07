@@ -9,6 +9,20 @@ function percent(value: number, total: number) {
   return Math.round((value / total) * 100);
 }
 
+function isDoneStatus(status: string) {
+  const normalized = status.trim().toLowerCase();
+  return normalized === "done" || normalized === "completed" || normalized === "closed";
+}
+
+function monthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthLabel(key: string) {
+  const [year, month] = key.split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+}
+
 type AnalyticsPageProps = {
   searchQuery?: string;
 };
@@ -71,6 +85,56 @@ export default function AnalyticsPage({ searchQuery = "" }: AnalyticsPageProps) 
   const activeDeg = (analytics.active / pieTotal) * 360;
   const blockedDeg = (analytics.blocked / pieTotal) * 360;
 
+  const deliveryTrend = useMemo(() => {
+    const now = new Date();
+    const months: string[] = [];
+    for (let i = 5; i >= 0; i -= 1) {
+      months.push(monthKey(new Date(now.getFullYear(), now.getMonth() - i, 1)));
+    }
+
+    const totalsByMonth = new Map<string, number>();
+    const doneByMonth = new Map<string, number>();
+    months.forEach((key) => {
+      totalsByMonth.set(key, 0);
+      doneByMonth.set(key, 0);
+    });
+
+    filteredProjects.forEach((project) => {
+      const created = new Date(project.created_at);
+      if (Number.isNaN(created.getTime())) return;
+      const key = monthKey(new Date(created.getFullYear(), created.getMonth(), 1));
+      if (!totalsByMonth.has(key)) return;
+      totalsByMonth.set(key, (totalsByMonth.get(key) || 0) + 1);
+      if (isDoneStatus(project.status)) {
+        doneByMonth.set(key, (doneByMonth.get(key) || 0) + 1);
+      }
+    });
+
+    return months.map((key) => {
+      const total = totalsByMonth.get(key) || 0;
+      const done = doneByMonth.get(key) || 0;
+      return {
+        key,
+        label: monthLabel(key),
+        total,
+        done,
+        rate: percent(done, total),
+      };
+    });
+  }, [filteredProjects]);
+
+  const chartWidth = 620;
+  const chartHeight = 220;
+  const chartPad = 28;
+  const stepX = deliveryTrend.length > 1 ? (chartWidth - chartPad * 2) / (deliveryTrend.length - 1) : 0;
+  const trendPoints = deliveryTrend
+    .map((point, index) => {
+      const x = chartPad + index * stepX;
+      const y = chartHeight - chartPad - (point.rate / 100) * (chartHeight - chartPad * 2);
+      return { x, y, ...point };
+    });
+  const polylinePoints = trendPoints.map((point) => `${point.x},${point.y}`).join(" ");
+
   return (
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
@@ -102,7 +166,7 @@ export default function AnalyticsPage({ searchQuery = "" }: AnalyticsPageProps) 
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
         <article className="rounded-xl border border-slate-200 bg-white p-5">
-          <h3 className="mb-3 text-sm font-semibold text-slate-900">Project Status Pie</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Project Status</h3>
           <div className="flex items-center gap-6">
             <div
               className="h-40 w-40 rounded-full"
@@ -147,6 +211,31 @@ export default function AnalyticsPage({ searchQuery = "" }: AnalyticsPageProps) 
       </div>
 
       <article className="rounded-xl border border-slate-200 bg-white p-5">
+        <h3 className="mb-1 text-sm font-semibold text-slate-900">Project Delivery Trend</h3>
+        <p className="mb-4 text-xs text-slate-500">Monthly completion rate (done vs created projects) for the last 6 months.</p>
+        <div className="overflow-x-auto">
+          <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="min-w-[620px] w-full">
+            <line x1={chartPad} y1={chartPad} x2={chartPad} y2={chartHeight - chartPad} stroke="#cbd5e1" strokeWidth="1.5" />
+            <line x1={chartPad} y1={chartHeight - chartPad} x2={chartWidth - chartPad} y2={chartHeight - chartPad} stroke="#cbd5e1" strokeWidth="1.5" />
+            <line x1={chartPad} y1={chartPad} x2={chartWidth - chartPad} y2={chartPad} stroke="#f1f5f9" strokeWidth="1" />
+            <line x1={chartPad} y1={(chartPad + chartHeight - chartPad) / 2} x2={chartWidth - chartPad} y2={(chartPad + chartHeight - chartPad) / 2} stroke="#f1f5f9" strokeWidth="1" />
+            <polyline fill="none" stroke="#0ea5e9" strokeWidth="3" points={polylinePoints} />
+            {trendPoints.map((point) => (
+              <g key={point.key}>
+                <circle cx={point.x} cy={point.y} r="4" fill="#0284c7" />
+                <text x={point.x} y={chartHeight - 8} textAnchor="middle" className="fill-slate-500 text-[10px]">
+                  {point.label}
+                </text>
+                <text x={point.x} y={point.y - 10} textAnchor="middle" className="fill-slate-700 text-[10px]">
+                  {point.rate}%
+                </text>
+              </g>
+            ))}
+          </svg>
+        </div>
+      </article>
+
+      <article className="rounded-xl border border-slate-200 bg-white p-5">
         <h3 className="mb-3 text-sm font-semibold text-slate-900">User Logs Working on Projects</h3>
         <ul className="space-y-2 text-sm text-slate-700">
           {analytics.logs.length === 0 ? <li className="rounded-lg bg-slate-50 px-3 py-2">No assignee activity yet.</li> : null}
@@ -160,4 +249,3 @@ export default function AnalyticsPage({ searchQuery = "" }: AnalyticsPageProps) 
     </section>
   );
 }
-

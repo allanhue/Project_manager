@@ -13,6 +13,8 @@ const defaultProfile: UserProfile = {
   organization_name: "",
   town: "",
   logo_url: "",
+  max_sessions: 0,
+  active_sessions_24h: 0,
 };
 
 export default function ProfilePage({ user }: ProfilePageProps) {
@@ -68,7 +70,7 @@ export default function ProfilePage({ user }: ProfilePageProps) {
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
         <h2 className="text-lg font-semibold text-slate-900">Profile</h2>
-        <p className="text-sm text-slate-600">Manage identity, logo, contact details, and organization profile information.</p>
+        <p className="text-sm text-slate-600">Manage identity, logo, contact details and organization profile information.</p>
       </header>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -108,8 +110,14 @@ export default function ProfilePage({ user }: ProfilePageProps) {
           <dl className="space-y-2 text-sm text-slate-700">
             <div className="flex justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"><dt>Email</dt><dd className="font-medium text-slate-900">{user.email}</dd></div>
             <div className="flex justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"><dt>User ID</dt><dd className="font-medium text-slate-900">{user.id}</dd></div>
-            <div className="flex justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"><dt>Tenant Slug</dt><dd className="font-medium text-slate-900">{user.tenantSlug}</dd></div>
-            <div className="flex justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"><dt>Tenant Name</dt><dd className="font-medium text-slate-900">{user.tenantName || profile.organization_name || "-"}</dd></div>
+            <div className="flex justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"><dt>Organization Slug</dt><dd className="font-medium text-slate-900">{user.tenantSlug}</dd></div>
+            <div className="flex justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"><dt>Organization Name</dt><dd className="font-medium text-slate-900">{user.tenantName || profile.organization_name || "-"}</dd></div>
+            {user.role === "org_admin" ? (
+              <>
+                <div className="flex justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"><dt>Active Sessions (24h)</dt><dd className="font-medium text-slate-900">{profile.active_sessions_24h || 0}</dd></div>
+                <div className="flex justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"><dt>Allowed Sessions</dt><dd className="font-medium text-slate-900">{profile.max_sessions || 5}</dd></div>
+              </>
+            ) : null}
           </dl>
           <div className="mt-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Logo Preview</p>
@@ -120,4 +128,3 @@ export default function ProfilePage({ user }: ProfilePageProps) {
     </section>
   );
 }
-

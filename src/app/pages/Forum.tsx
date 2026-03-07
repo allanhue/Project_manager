@@ -51,7 +51,7 @@ export default function ForumPage({ searchQuery = "" }: ForumPageProps) {
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
         <h2 className="text-lg font-semibold text-slate-900">Forum</h2>
-        <p className="text-sm text-slate-600">Internal discussions, clarifications, and knowledge sharing.</p>
+        <p className="text-sm text-slate-600">Internal discussions, clarifications and knowledge sharing.</p>
       </header>
       <form onSubmit={onCreate} className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="grid gap-3">

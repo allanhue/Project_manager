@@ -21,6 +21,13 @@ function statusLabel(status: string) {
   return status;
 }
 
+function splitAssigneeInput(raw: string): string[] {
+  return raw
+    .split(/[,\n;]+/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 type ProjectsPageProps = {
   searchQuery?: string;
 };
@@ -40,8 +47,10 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
   const [newDurationDays, setNewDurationDays] = useState(30);
   const [newTeamSize, setNewTeamSize] = useState(3);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [newAssigneeInput, setNewAssigneeInput] = useState("");
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [selectedReportProjectID, setSelectedReportProjectID] = useState<number | "">("");
+  const [isMiniReportOpen, setIsMiniReportOpen] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   async function loadProjects() {
@@ -85,6 +94,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
       setNewProjectCode("");
       setNewStatus("active");
       setSelectedAssignees([]);
+      setNewAssigneeInput("");
       setNewStartDate(new Date().toISOString().slice(0, 10));
       setNewDurationDays(30);
       setNewTeamSize(3);
@@ -102,6 +112,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
     setNewProjectCode("");
     setNewStatus("active");
     setSelectedAssignees([]);
+    setNewAssigneeInput("");
     setNewStartDate(new Date().toISOString().slice(0, 10));
     setNewDurationDays(30);
     setNewTeamSize(3);
@@ -146,10 +157,31 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
     setNewProjectCode(project.project_code || "");
     setNewStatus(project.status || "active");
     setSelectedAssignees(project.assignees || []);
+    setNewAssigneeInput("");
     setNewStartDate(project.start_date ? new Date(project.start_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
     setNewDurationDays(project.duration_days || 30);
     setNewTeamSize(project.team_size || 1);
     setShowCreate(true);
+  }
+
+  function addAssigneesFromInput(raw: string) {
+    const entries = splitAssigneeInput(raw);
+    if (entries.length === 0) return;
+    setSelectedAssignees((prev) => {
+      const dedup = new Set(prev.map((item) => item.toLowerCase()));
+      const next = [...prev];
+      entries.forEach((entry) => {
+        const key = entry.toLowerCase();
+        if (dedup.has(key)) return;
+        dedup.add(key);
+        next.push(entry);
+      });
+      return next;
+    });
+  }
+
+  function removeAssignee(index: number) {
+    setSelectedAssignees((prev) => prev.filter((_, i) => i !== index));
   }
 
   const filteredProjects = useMemo(() => {
@@ -203,73 +235,95 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
         </div>
       </header>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4">
           <div>
             <h3 className="text-sm font-semibold text-slate-900">Project Mini Report</h3>
             <p className="text-xs text-slate-600">Choose a project to view tasks and issues raised for the same project.</p>
           </div>
-          <select
-            value={String(selectedReportProjectID)}
-            onChange={(event) => setSelectedReportProjectID(event.target.value ? Number(event.target.value) : "")}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
+          <button
+            type="button"
+            onClick={() => setIsMiniReportOpen((prev) => !prev)}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700 transition hover:bg-slate-100"
+            aria-expanded={isMiniReportOpen}
           >
-            <option value="">Select a project</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
+            {isMiniReportOpen ? "Collapse" : "Expand"}
+            <span
+              className={`inline-block text-sm leading-none transition-transform duration-300 ${isMiniReportOpen ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            >
+              ^
+            </span>
+          </button>
         </div>
-        {selectedReportProject ? (
-          <>
-            <div className="mb-3 grid gap-3 sm:grid-cols-3">
-              <article className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-[11px] uppercase tracking-wide text-slate-500">Tasks</p><p className="text-lg font-semibold text-slate-900">{selectedProjectTasks.length}</p></article>
-              <article className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-[11px] uppercase tracking-wide text-slate-500">Done Tasks</p><p className="text-lg font-semibold text-emerald-700">{selectedDoneTasks}</p></article>
-              <article className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-[11px] uppercase tracking-wide text-slate-500">Issues Raised</p><p className="text-lg font-semibold text-amber-700">{selectedProjectIssues.length}</p></article>
+
+        <div className={`grid transition-all duration-300 ease-out ${isMiniReportOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+          <div className="overflow-hidden px-4 py-4">
+            <div className="mb-3">
+              <select
+                value={String(selectedReportProjectID)}
+                onChange={(event) => setSelectedReportProjectID(event.target.value ? Number(event.target.value) : "")}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 sm:max-w-sm"
+              >
+                <option value="">Select a project</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="text-slate-500">
-                  <tr className="border-b border-slate-200">
-                    <th className="px-2 py-2 font-medium">Type</th>
-                    <th className="px-2 py-2 font-medium">Title</th>
-                    <th className="px-2 py-2 font-medium">Status</th>
-                    <th className="px-2 py-2 font-medium">Priority / Severity</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedProjectTasks.slice(0, 6).map((item) => (
-                    <tr key={`task-mini-${item.id}`} className="border-b border-slate-100">
-                      <td className="px-2 py-2 text-slate-700">Task</td>
-                      <td className="px-2 py-2 text-slate-900">{item.title}</td>
-                      <td className="px-2 py-2 text-slate-700">{item.status}</td>
-                      <td className="px-2 py-2 text-slate-700">{item.priority}</td>
-                    </tr>
-                  ))}
-                  {selectedProjectIssues.slice(0, 6).map((item) => (
-                    <tr key={`issue-mini-${item.id}`} className="border-b border-slate-100">
-                      <td className="px-2 py-2 text-slate-700">Issue</td>
-                      <td className="px-2 py-2 text-slate-900">{item.title}</td>
-                      <td className="px-2 py-2 text-slate-700">{item.status}</td>
-                      <td className="px-2 py-2 text-slate-700">{item.severity}</td>
-                    </tr>
-                  ))}
-                  {selectedProjectTasks.length === 0 && selectedProjectIssues.length === 0 ? (
-                    <tr>
-                      <td className="px-2 py-2 text-slate-500" colSpan={4}>
-                        No tasks or issues found for this project.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-slate-500">Choose a project to display its mini report.</p>
-        )}
+
+            {selectedReportProject ? (
+              <>
+                <div className="mb-3 grid gap-3 sm:grid-cols-3">
+                  <article className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 shadow-sm"><p className="text-[11px] uppercase tracking-wide text-slate-500">Tasks</p><p className="text-lg font-semibold text-slate-900">{selectedProjectTasks.length}</p></article>
+                  <article className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 shadow-sm"><p className="text-[11px] uppercase tracking-wide text-slate-500">Done Tasks</p><p className="text-lg font-semibold text-emerald-700">{selectedDoneTasks}</p></article>
+                  <article className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 shadow-sm"><p className="text-[11px] uppercase tracking-wide text-slate-500">Issues Raised</p><p className="text-lg font-semibold text-amber-700">{selectedProjectIssues.length}</p></article>
+                </div>
+                <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                  <table className="w-full min-w-[760px] text-left text-sm">
+                    <thead className="text-slate-500">
+                      <tr className="border-b border-slate-200">
+                        <th className="px-2 py-2 font-medium">Type</th>
+                        <th className="px-2 py-2 font-medium">Title</th>
+                        <th className="px-2 py-2 font-medium">Status</th>
+                        <th className="px-2 py-2 font-medium">Priority / Severity</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedProjectTasks.slice(0, 6).map((item) => (
+                        <tr key={`task-mini-${item.id}`} className="border-b border-slate-100">
+                          <td className="px-2 py-2 text-slate-700">Task</td>
+                          <td className="px-2 py-2 text-slate-900">{item.title}</td>
+                          <td className="px-2 py-2 text-slate-700">{item.status}</td>
+                          <td className="px-2 py-2 text-slate-700">{item.priority}</td>
+                        </tr>
+                      ))}
+                      {selectedProjectIssues.slice(0, 6).map((item) => (
+                        <tr key={`issue-mini-${item.id}`} className="border-b border-slate-100">
+                          <td className="px-2 py-2 text-slate-700">Issue</td>
+                          <td className="px-2 py-2 text-slate-900">{item.title}</td>
+                          <td className="px-2 py-2 text-slate-700">{item.status}</td>
+                          <td className="px-2 py-2 text-slate-700">{item.severity}</td>
+                        </tr>
+                      ))}
+                      {selectedProjectTasks.length === 0 && selectedProjectIssues.length === 0 ? (
+                        <tr>
+                          <td className="px-2 py-2 text-slate-500" colSpan={4}>
+                            No tasks or issues found for this project.
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">Choose a project to display its mini report.</p>
+            )}
+          </div>
+        </div>
       </section>
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -324,13 +378,16 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                       <button type="button" onClick={() => openEdit(project)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100">
                         Edit
                       </button>
-                      <button
+                      {/* <button
                         type="button"
-                        onClick={() => setSelectedReportProjectID(project.id)}
+                        onClick={() => {
+                          setSelectedReportProjectID(project.id);
+                          setIsMiniReportOpen(true);
+                        }}
                         className="rounded-lg bg-slate-900 px-3 py-1 text-xs font-medium text-white"
                       >
                         Report
-                      </button>
+                      </button> */}
                     </div>
                   </td>
                 </tr>
@@ -345,7 +402,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
           <form onSubmit={editingProject ? onUpdate : onCreate} className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
               <h3 className="text-lg font-semibold text-slate-900">{editingProject ? "Edit Project" : "Create Project"}</h3>
-              <p className="mt-1 text-sm text-slate-600">{editingProject ? "Update timeline, ownership, and staffing details." : "Define timeline, ownership, and staffing in one place."}</p>
+              <p className="mt-1 text-sm text-slate-600">{editingProject ? "Update timeline, ownership and staffing details." : "Define timeline, ownership and staffing in one place."}</p>
             </div>
 
             <div className="grid gap-4 p-6 md:grid-cols-2">
@@ -373,18 +430,62 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Assignees</label>
-                <select
-                  multiple
-                  value={selectedAssignees}
-                  onChange={(event) => setSelectedAssignees(Array.from(event.target.selectedOptions).map((option) => option.value))}
-                  className="h-24 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
-                >
-                  {users.map((user) => (
-                    <option key={user.id || user.email} value={user.email}>
-                      {user.name} ({user.email})
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-2 rounded-lg border border-slate-300 bg-white p-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedAssignees.length > 0 ? (
+                      selectedAssignees.map((assignee, index) => (
+                        <span key={`${assignee}-${index}`} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-800">
+                          {assignee}
+                          <button
+                            type="button"
+                            onClick={() => removeAssignee(index)}
+                            className="rounded-full px-1 text-slate-500 hover:bg-slate-200 hover:text-slate-800"
+                            aria-label={`Remove ${assignee}`}
+                          >
+                            x
+                          </button>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-slate-500">No assignees yet.</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={newAssigneeInput}
+                      onChange={(event) => setNewAssigneeInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === ",") {
+                          event.preventDefault();
+                          addAssigneesFromInput(newAssigneeInput);
+                          setNewAssigneeInput("");
+                        }
+                      }}
+                      list="project-assignee-options"
+                      placeholder="Type name or email"
+                      className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        addAssigneesFromInput(newAssigneeInput);
+                        setNewAssigneeInput("");
+                      }}
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <datalist id="project-assignee-options">
+                    {users.map((user) => (
+                      <option key={user.id || user.email} value={user.email}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </datalist>
+                  {/* <p className="text-[11px] text-slate-500">Tag any responsible person using email or name. Separate multiple values with comma.</p> */}
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Start Date</label>

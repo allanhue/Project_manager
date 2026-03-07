@@ -7,16 +7,17 @@ import (
 )
 
 type tenantUser struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
-	Role  string `json:"role"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	Role    string `json:"role"`
+	Blocked bool   `json:"blocked"`
 }
 
 func (s *Service) ListUsers(c *gin.Context) {
 	tenantSlug := tenantFromContext(c)
 	rows, err := s.DB.Query(c.Request.Context(), `
-		SELECT COALESCE(u.public_id, ''), u.name, u.email, u.role
+		SELECT COALESCE(u.public_id, ''), u.name, u.email, u.role, COALESCE(u.blocked, false)
 		FROM users u
 		JOIN tenants t ON t.id = u.tenant_id
 		WHERE t.slug = $1
@@ -31,7 +32,7 @@ func (s *Service) ListUsers(c *gin.Context) {
 	items := make([]tenantUser, 0)
 	for rows.Next() {
 		var user tenantUser
-		if err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.Role); err != nil {
+		if err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.Blocked); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
 			return
 		}

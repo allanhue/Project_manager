@@ -9,6 +9,7 @@ import { AuthUser, getSession, getSystemAnalytics, getSystemLogs, getSystemUpdat
 import { Nav } from "../componets/Nav";
 import { LoadingSpinner } from "../componets/LoadingSpinner";
 import AnalyticsPage from "./Analytics";
+import ApprovalsPage from "./Approvals";
 import CalendarPage from "./Calendar";
 import ForumPage from "./Forum";
 import IssuesPage from "./Issues";
@@ -20,7 +21,7 @@ import SettingsPage from "./Settings";
 import TasksPage from "./Task";
 import TimesheetsPage from "./Timesheets";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "forum" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "approvals" | "forum" | "issues" | "profile" | "settings" | "admin";
 
 function DashboardOverview({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
   const [projectCount, setProjectCount] = useState(0);
@@ -282,6 +283,7 @@ export default function Dashboard() {
     if (currentPage === "analytics") return <AnalyticsPage searchQuery={searchQuery} />;
     if (currentPage === "reports") return <ReportsPage searchQuery={searchQuery} />;
     if (currentPage === "calendar") return <CalendarPage />;
+    if (currentPage === "approvals") return <ApprovalsPage searchQuery={searchQuery} />;
     if (currentPage === "forum") return <ForumPage searchQuery={searchQuery} />;
     if (currentPage === "issues") return <IssuesPage searchQuery={searchQuery} />;
     if (currentPage === "profile" && user) return <ProfilePage user={user} />;
