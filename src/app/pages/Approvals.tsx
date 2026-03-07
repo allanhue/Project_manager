@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ApprovalRequest, createApprovalRequest, getUserSettings, listApprovalRequests, listProjects, Project, UserSettings } from "../auth/auth";
+import { actionApprovalRequest, ApprovalRequest, createApprovalRequest, getUserSettings, listApprovalRequests, listProjects, Project, UserSettings } from "../auth/auth";
 import { LoadingSpinner } from "../componets/LoadingSpinner";
 
 type ApprovalsPageProps = {
@@ -33,6 +33,7 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [submittingRequest, setSubmittingRequest] = useState(false);
 
   const [projectID, setProjectID] = useState("");
   const [hours, setHours] = useState("");
@@ -60,7 +61,11 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return items;
-    return items.filter((item) => `${item.project_name} ${item.status} ${item.note} ${item.requested_by_email} ${item.approval_mode}`.toLowerCase().includes(q));
+    return items.filter((item) =>
+      `${item.project_name} ${item.status} ${item.note} ${item.requested_by_email} ${item.approval_mode} ${(item.approver_emails || []).join(" ")} ${(item.approvals || []).join(" ")} ${item.current_step || 0}`
+        .toLowerCase()
+        .includes(q),
+    );
   }, [items, searchQuery]);
 
   const summary = useMemo(() => {
@@ -72,6 +77,8 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submittingRequest) return;
+    setSubmittingRequest(true);
     setStatus("Submitting approval request...");
     try {
       await createApprovalRequest({
@@ -86,6 +93,19 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
       await loadData();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to submit approval request.");
+    } finally {
+      setSubmittingRequest(false);
+    }
+  }
+
+  async function onAction(id: number, action: "approve" | "reject") {
+    setStatus(action === "approve" ? "Approving request..." : "Rejecting request...");
+    try {
+      await actionApprovalRequest({ id, action });
+      setStatus(action === "approve" ? "Request approved." : "Request rejected.");
+      await loadData();
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to update approval request.");
     }
   }
 
@@ -93,7 +113,7 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
         <h2 className="text-lg font-semibold text-slate-900">Approvals</h2>
-        <p className="text-sm text-slate-600">Approval workflow for billable projects and timesheet-related delivery checks. Approvals are processed via email links only.</p>
+        <p className="text-sm text-slate-600">Approval workflow for billable projects and timesheet-related delivery checks.</p>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -110,6 +130,17 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
           <p className="text-2xl font-semibold text-emerald-700">{summary.approved}</p>
         </article>
       </div>
+      <article className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+        <p className="text-xs uppercase tracking-wide text-slate-500">Configured Approver Flow</p>
+        {settings.approval_approvers.length === 0 ? <p className="mt-2 text-sm text-slate-500">No approver emails configured in Advanced Settings.</p> : null}
+        <div className="mt-2 flex flex-wrap gap-2">
+          {settings.approval_approvers.map((email, index) => (
+            <span key={`approver-flow-${email}`} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+              {settings.approval_pipeline === "multi_approval" ? `${index + 1}. ` : ""}{email}
+            </span>
+          ))}
+        </div>
+      </article>
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       {loading ? <LoadingSpinner label="Loading approvals..." /> : null}
@@ -134,8 +165,13 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
             placeholder="Billable hours (optional)"
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none"
           />
-          <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
-            Submit Request
+          <button
+            type="submit"
+            disabled={submittingRequest}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-500"
+          >
+            {submittingRequest ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-white" /> : null}
+            {submittingRequest ? "Submitting..." : "Submit Request"}
           </button>
         </div>
         <textarea
@@ -155,6 +191,7 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
                 <th className="px-2 py-2 font-medium">Project</th>
                 <th className="px-2 py-2 font-medium">Hours</th>
                 <th className="px-2 py-2 font-medium">Pipeline</th>
+                <th className="px-2 py-2 font-medium">Approver Flow</th>
                 <th className="px-2 py-2 font-medium">Approvals</th>
                 <th className="px-2 py-2 font-medium">Status</th>
                 <th className="px-2 py-2 font-medium">Requested By</th>
@@ -167,8 +204,9 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
                   <td className="px-2 py-3 text-slate-900">{item.project_name || "-"}</td>
                   <td className="px-2 py-3 text-slate-700">{item.billable_hours.toFixed(2)}</td>
                   <td className="px-2 py-3 text-slate-700">{item.approval_mode === "multi_approval" ? "Multi Approval" : "Simple"}</td>
+                  <td className="px-2 py-3 text-slate-700">{(item.approver_emails || []).join(" -> ") || "-"}</td>
                   <td className="px-2 py-3 text-slate-700">
-                    {item.approvals.length}/{item.required_approvals}
+                    {item.approvals.length}/{item.required_approvals} {item.status === "pending" ? `(step ${(item.current_step || 0) + 1})` : ""}
                   </td>
                   <td className="px-2 py-3">
                     <span className={`rounded-full px-2 py-1 text-xs font-medium ${item.status === "approved" ? "bg-emerald-50 text-emerald-700" : item.status === "rejected" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>
@@ -176,12 +214,31 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
                     </span>
                   </td>
                   <td className="px-2 py-3 text-slate-700">{item.requested_by_email}</td>
-                  <td className="px-2 py-3 text-slate-600">Mail-only approval</td>
+                  <td className="px-2 py-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void onAction(item.id, "approve")}
+                        disabled={item.status !== "pending"}
+                        className="rounded-lg border border-emerald-300 px-3 py-1 text-xs font-medium text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onAction(item.id, "reject")}
+                        disabled={item.status !== "pending"}
+                        className="rounded-lg border border-rose-300 px-3 py-1 text-xs font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td className="px-2 py-3 text-slate-500" colSpan={7}>
+                  <td className="px-2 py-3 text-slate-500" colSpan={8}>
                     No approval requests yet.
                   </td>
                 </tr>

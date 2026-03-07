@@ -44,6 +44,7 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
   const [supportStatus, setSupportStatus] = useState("");
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [summary, setSummary] = useState<NotificationSummary | undefined>(undefined);
+  const [dismissedToastIds, setDismissedToastIds] = useState<string[]>([]);
 
   const refreshNotifications = useCallback(async () => {
     try {
@@ -124,8 +125,8 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
     [notifications],
   );
   const reminderStack = useMemo(
-    () => notifications.filter((item) => item.type !== "summary").slice(0, 3),
-    [notifications],
+    () => notifications.filter((item) => item.type !== "summary" && !dismissedToastIds.includes(item.id)).slice(0, 3),
+    [notifications, dismissedToastIds],
   );
   const searchPlaceholder =
     currentPage === "projects"
@@ -316,9 +317,20 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
       ) : null}
 
       {reminderStack.length > 0 ? (
-        <div className="pointer-events-none fixed bottom-4 right-4 z-30 hidden w-80 space-y-2 md:block">
+        <div className="fixed bottom-4 right-4 z-30 hidden w-80 space-y-2 md:block">
           {reminderStack.map((item) => (
             <article key={`toast-${item.id}`} className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+              <div className="mb-1 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDismissedToastIds((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]))}
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Dismiss notification"
+                  title="Dismiss"
+                >
+                  x
+                </button>
+              </div>
               <div className="mb-1 h-1 w-full rounded-full bg-slate-100">
                 <div className={`h-1 rounded-full ${item.type === "project" ? "bg-amber-400" : "bg-sky-500"}`} style={{ width: "68%" }} />
               </div>

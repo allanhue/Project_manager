@@ -97,6 +97,8 @@ export default function SettingsPage() {
       };
       const response = await updateUserSettings(payload);
       setSettingsStatus(response.status || "Settings saved.");
+      const latest = await getUserSettings();
+      setSettings({ ...defaultSettings, ...latest });
     } catch (err) {
       setSettingsStatus(err instanceof Error ? err.message : "Failed to save settings.");
     } finally {
@@ -321,6 +323,15 @@ export default function SettingsPage() {
                       {settings.approval_pipeline === "multi_approval" ? "Requires two approvals before final approval status." : "Single approval finalizes the request."}
                     </p>
                   </div>
+                  <div className="rounded-lg bg-slate-50 px-3 py-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Saved Approver Flow</p>
+                    {settings.approval_approvers.length === 0 ? <p className="mt-1 text-xs text-slate-500">No approver saved yet.</p> : null}
+                    {settings.approval_approvers.map((email, index) => (
+                      <p key={`saved-approver-${email}`} className="mt-1 text-xs text-slate-700">
+                        {settings.approval_pipeline === "multi_approval" ? `${index + 1}. ` : ""}{email}
+                      </p>
+                    ))}
+                  </div>
                   <label className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                     <span>Email approval notifications</span>
                     <input
@@ -372,6 +383,9 @@ export default function SettingsPage() {
                   >
                     {savingSettings ? "Saving..." : "Save Approval Config"}
                   </button>
+                  {settings.approval_pipeline === "multi_approval" && settings.approval_approvers.length < 2 ? (
+                    <p className="text-xs text-amber-700">Multi approval works best with at least 2 approver emails.</p>
+                  ) : null}
                 </div>
               </article>
 
