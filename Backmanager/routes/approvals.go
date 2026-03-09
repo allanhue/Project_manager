@@ -356,3 +356,27 @@ func (s *Service) sendApprovalStepEmail(ctx context.Context, item approvalReques
 	}
 	return nil
 }
+
+func (s *Service) DeleteApprovalRequest(c *gin.Context) {
+	tenantID := tenantFromContext(c)
+	requestID, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
+	if err != nil || requestID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid approval request id"})
+		return
+	}
+
+	commandTag, err := s.DB.Exec(c.Request.Context(), `
+		DELETE FROM approval_requests
+		WHERE id = $1 AND tenant_id = $2
+	`, requestID, tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "delete failed"})
+		return
+	}
+	if commandTag.RowsAffected() == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "approval request not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+}

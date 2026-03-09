@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { createProject, IssueItem, listIssues, listProjects, listTasks, listUsers, Project, TaskItem, TenantUser, updateProject } from "../auth/auth";
+import { createProject, deleteProject, IssueItem, listIssues, listProjects, listTasks, listUsers, Project, TaskItem, TenantUser, updateProject } from "../auth/auth";
 import { LoadingSpinner } from "../componets/LoadingSpinner";
 
 function statusClass(status: string) {
@@ -49,9 +49,16 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [newAssigneeInput, setNewAssigneeInput] = useState("");
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [selectedProjects, setSelectedProjects] = useState<number[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [deletingProjectId, setDeletingProjectId] = useState<number | null>(null);
+  const [openMenuProjectId, setOpenMenuProjectId] = useState<number | null>(null);
+  const [isBulkMenuOpen, setIsBulkMenuOpen] = useState(false);
+  const [projectAttachments, setProjectAttachments] = useState<File[]>([]);
   const [selectedReportProjectID, setSelectedReportProjectID] = useState<number | "">("");
   const [isMiniReportOpen, setIsMiniReportOpen] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
 
   async function loadProjects() {
     setLoading(true);
@@ -62,7 +69,9 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
       setUsers(tenantUsers);
       setTasks(taskItems);
       setIssues(issueItems);
-      if (items.length > 0 && selectedReportProjectID === "") setSelectedReportProjectID(items[0].id);
+      if (items.length > 0 && selectedReportProjectID === "") {
+        setSelectedReportProjectID(items[0].id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch projects.");
     } finally {
@@ -72,7 +81,30 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
 
   useEffect(() => {
     void loadProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (openMenuProjectId === null) return undefined;
+    function handleClick(event: MouseEvent) {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("[data-project-menu]")) return;
+      setOpenMenuProjectId(null);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [openMenuProjectId]);
+
+  useEffect(() => {
+    if (!isBulkMenuOpen) return undefined;
+    function handleClick(event: MouseEvent) {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("[data-project-bulk-menu]")) return;
+      setIsBulkMenuOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [isBulkMenuOpen]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,8 +120,9 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
         start_date: newStartDate,
         duration_days: newDurationDays,
         team_size: newTeamSize,
+        attachments: projectAttachments.map((file) => file.name),
       });
-      setProjects((prev) => [created, ...prev]);
+      setProjects((prev) => [...prev, created]);
       setNewName("");
       setNewProjectCode("");
       setNewStatus("active");
@@ -116,6 +149,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
     setNewStartDate(new Date().toISOString().slice(0, 10));
     setNewDurationDays(30);
     setNewTeamSize(3);
+    setProjectAttachments([]);
     setShowCreate(true);
   }
 
@@ -123,6 +157,26 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
     if (submitting) return;
     setShowCreate(false);
     setEditingProject(null);
+  }
+
+  async function onBulkDelete() {
+    if (selectedProjects.length === 0) return;
+    if (!window.confirm(`Delete ${selectedProjects.length} selected project(s)? This will also remove their tasks.`)) return;
+    setError("");
+    try {
+      for (const id of selectedProjects) {
+        await deleteProject(id);
+      }
+      setProjects((prev) => prev.filter((project) => !selectedProjects.includes(project.id)));
+      setTasks((prev) => prev.filter((task) => !selectedProjects.includes(task.project_id)));
+      setSelectedProjects([]);
+      setIsSelectionMode(false);
+      if (selectedReportProjectID && selectedProjects.includes(Number(selectedReportProjectID))) {
+        setSelectedReportProjectID("");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete projects.");
+    }
   }
 
   async function onUpdate(event: FormEvent<HTMLFormElement>) {
@@ -140,6 +194,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
         start_date: newStartDate,
         duration_days: newDurationDays,
         team_size: newTeamSize,
+        attachments: projectAttachments.map((file) => file.name),
       });
       setProjects((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
       setEditingProject(null);
@@ -152,6 +207,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
   }
 
   function openEdit(project: Project) {
+    setOpenMenuProjectId(null);
     setEditingProject(project);
     setNewName(project.name);
     setNewProjectCode(project.project_code || "");
@@ -162,6 +218,27 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
     setNewDurationDays(project.duration_days || 30);
     setNewTeamSize(project.team_size || 1);
     setShowCreate(true);
+  }
+
+  async function onDelete(project: Project) {
+    if (deletingProjectId !== null) return;
+    setOpenMenuProjectId(null);
+    if (!window.confirm(`Delete "${project.name}"? This will also remove its tasks.`)) return;
+    setError("");
+    setDeletingProjectId(project.id);
+    try {
+      await deleteProject(project.id);
+      setProjects((prev) => prev.filter((item) => item.id !== project.id));
+      setTasks((prev) => prev.filter((item) => item.project_id !== project.id));
+      if (selectedReportProjectID === project.id) {
+        setSelectedReportProjectID("");
+      }
+      if (editingProject?.id === project.id) closeForm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete project.");
+    } finally {
+      setDeletingProjectId(null);
+    }
   }
 
   function addAssigneesFromInput(raw: string) {
@@ -225,17 +302,98 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-slate-900">Project Portfolio</h2>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-[1px]"
-          >
-            New Project
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openCreate}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-px"
+            >
+              New Project
+            </button>
+            <div className="relative" data-project-bulk-menu>
+              <button
+                type="button"
+                onClick={() => setIsBulkMenuOpen((prev) => !prev)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100"
+                aria-label="Open bulk actions"
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden="true">
+                  <circle cx="12" cy="5" r="2" />
+                  <circle cx="12" cy="12" r="2" />
+                  <circle cx="12" cy="19" r="2" />
+                </svg>
+              </button>
+              {isBulkMenuOpen ? (
+                <div className="absolute right-0 top-11 z-10 w-52 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                  {!isSelectionMode ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProjects([]);
+                        setIsSelectionMode(true);
+                        setIsBulkMenuOpen(false);
+                      }}
+                      className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Select Delete
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedProjects(filteredProjects.map((p) => p.id));
+                          setIsBulkMenuOpen(false);
+                        }}
+                        disabled={filteredProjects.length === 0 || selectedProjects.length === filteredProjects.length}
+                        className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedProjects([]);
+                          setIsBulkMenuOpen(false);
+                        }}
+                        disabled={selectedProjects.length === 0}
+                        className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Clear selection
+                      </button>
+                      <div className="my-1 border-t border-slate-100" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBulkMenuOpen(false);
+                          void onBulkDelete();
+                        }}
+                        disabled={selectedProjects.length === 0}
+                        className="block w-full rounded-lg px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Delete selected{selectedProjects.length ? ` (${selectedProjects.length})` : ""}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSelectionMode(false);
+                          setSelectedProjects([]);
+                          setIsBulkMenuOpen(false);
+                        }}
+                        className="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-100"
+                      >
+                        Exit selection mode
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
       </header>
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-linear-to-br from-white to-slate-50">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4">
           <div>
             <h3 className="text-sm font-semibold text-slate-900">Project Mini Report</h3>
@@ -245,7 +403,6 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
             type="button"
             onClick={() => setIsMiniReportOpen((prev) => !prev)}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700 transition hover:bg-slate-100"
-            aria-expanded={isMiniReportOpen}
           >
             {isMiniReportOpen ? "Collapse" : "Expand"}
             <span
@@ -260,7 +417,14 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
         <div className={`grid transition-all duration-300 ease-out ${isMiniReportOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
           <div className="overflow-hidden px-4 py-4">
             <div className="mb-3">
+              <label
+                htmlFor="mini-report-project"
+                className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Project
+              </label>
               <select
+                id="mini-report-project"
                 value={String(selectedReportProjectID)}
                 onChange={(event) => setSelectedReportProjectID(event.target.value ? Number(event.target.value) : "")}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 sm:max-w-sm"
@@ -277,9 +441,18 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
             {selectedReportProject ? (
               <>
                 <div className="mb-3 grid gap-3 sm:grid-cols-3">
-                  <article className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 shadow-sm"><p className="text-[11px] uppercase tracking-wide text-slate-500">Tasks</p><p className="text-lg font-semibold text-slate-900">{selectedProjectTasks.length}</p></article>
-                  <article className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 shadow-sm"><p className="text-[11px] uppercase tracking-wide text-slate-500">Done Tasks</p><p className="text-lg font-semibold text-emerald-700">{selectedDoneTasks}</p></article>
-                  <article className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 shadow-sm"><p className="text-[11px] uppercase tracking-wide text-slate-500">Issues Raised</p><p className="text-lg font-semibold text-amber-700">{selectedProjectIssues.length}</p></article>
+                  <article className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 shadow-sm">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Tasks</p>
+                    <p className="text-lg font-semibold text-slate-900">{selectedProjectTasks.length}</p>
+                  </article>
+                  <article className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 shadow-sm">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Done Tasks</p>
+                    <p className="text-lg font-semibold text-emerald-700">{selectedDoneTasks}</p>
+                  </article>
+                  <article className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 shadow-sm">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Issues Raised</p>
+                    <p className="text-lg font-semibold text-amber-700">{selectedProjectIssues.length}</p>
+                  </article>
                 </div>
                 <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
                   <table className="w-full min-w-[760px] text-left text-sm">
@@ -287,6 +460,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                       <tr className="border-b border-slate-200">
                         <th className="px-2 py-2 font-medium">Type</th>
                         <th className="px-2 py-2 font-medium">Title</th>
+                        <th className="px-2 py-2 font-medium">Phase</th>
                         <th className="px-2 py-2 font-medium">Status</th>
                         <th className="px-2 py-2 font-medium">Priority / Severity</th>
                       </tr>
@@ -296,6 +470,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                         <tr key={`task-mini-${item.id}`} className="border-b border-slate-100">
                           <td className="px-2 py-2 text-slate-700">Task</td>
                           <td className="px-2 py-2 text-slate-900">{item.title}</td>
+                          <td className="px-2 py-2 text-slate-700">{item.phase || "-"}</td>
                           <td className="px-2 py-2 text-slate-700">{item.status}</td>
                           <td className="px-2 py-2 text-slate-700">{item.priority}</td>
                         </tr>
@@ -304,13 +479,14 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                         <tr key={`issue-mini-${item.id}`} className="border-b border-slate-100">
                           <td className="px-2 py-2 text-slate-700">Issue</td>
                           <td className="px-2 py-2 text-slate-900">{item.title}</td>
+                          <td className="px-2 py-2 text-slate-700">-</td>
                           <td className="px-2 py-2 text-slate-700">{item.status}</td>
                           <td className="px-2 py-2 text-slate-700">{item.severity}</td>
                         </tr>
                       ))}
                       {selectedProjectTasks.length === 0 && selectedProjectIssues.length === 0 ? (
                         <tr>
-                          <td className="px-2 py-2 text-slate-500" colSpan={4}>
+                          <td className="px-2 py-2 text-slate-500" colSpan={5}>
                             No tasks or issues found for this project.
                           </td>
                         </tr>
@@ -345,10 +521,26 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
       {loading ? <LoadingSpinner label="Loading projects..." /> : null}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] text-left text-sm">
+        <table className="w-full text-left text-sm">
             <thead className="text-slate-500">
               <tr className="border-b border-slate-200">
+              {isSelectionMode ? (
+                <th className="px-2 py-2 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={selectedProjects.length === filteredProjects.length && filteredProjects.length > 0}
+                    aria-label="Select all projects"
+                    onChange={(event) => {
+                      if (event.target.checked) {
+                        setSelectedProjects(filteredProjects.map((p) => p.id));
+                      } else {
+                        setSelectedProjects([]);
+                      }
+                    }}
+                    className="rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                  />
+                </th>
+              ) : null}
                 <th className="px-2 py-2 font-medium">Project</th>
                 <th className="px-2 py-2 font-medium">Status</th>
                 <th className="px-2 py-2 font-medium">Assignees</th>
@@ -361,6 +553,23 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
             <tbody>
               {filteredProjects.map((project) => (
                 <tr key={project.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  {isSelectionMode ? (
+                    <td className="px-2 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedProjects.includes(project.id)}
+                        aria-label={`Select project ${project.name}`}
+                        onChange={(event) => {
+                          if (event.target.checked) {
+                            setSelectedProjects((prev) => [...prev, project.id]);
+                          } else {
+                            setSelectedProjects((prev) => prev.filter((id) => id !== project.id));
+                          }
+                        }}
+                        className="rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                      />
+                    </td>
+                  ) : null}
                   <td className="px-2 py-3 font-medium text-slate-900">{project.name}</td>
                   <td className="px-2 py-3">
                     <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${statusClass(project.status)}`}>{statusLabel(project.status)}</span>
@@ -374,27 +583,44 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                   <td className="px-2 py-3 text-slate-700">{project.team_size}</td>
                   <td className="px-2 py-3 text-slate-700">{new Date(project.created_at).toLocaleString()}</td>
                   <td className="px-2 py-3">
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => openEdit(project)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100">
-                        Edit
-                      </button>
-                      {/* <button
+                    <div className="relative flex justify-end" data-project-menu>
+                      <button
                         type="button"
-                        onClick={() => {
-                          setSelectedReportProjectID(project.id);
-                          setIsMiniReportOpen(true);
-                        }}
-                        className="rounded-lg bg-slate-900 px-3 py-1 text-xs font-medium text-white"
+                        onClick={() => setOpenMenuProjectId((prev) => (prev === project.id ? null : project.id))}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-100"
+                        aria-label={`Open actions for ${project.name}`}
                       >
-                        Report
-                      </button> */}
+                        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                          <circle cx="12" cy="5" r="2" />
+                          <circle cx="12" cy="12" r="2" />
+                          <circle cx="12" cy="19" r="2" />
+                        </svg>
+                      </button>
+                      {openMenuProjectId === project.id ? (
+                        <div className="absolute right-0 top-11 z-10 w-32 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                          <button
+                            type="button"
+                            onClick={() => openEdit(project)}
+                            className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void onDelete(project)}
+                            disabled={deletingProjectId === project.id}
+                            className="block w-full rounded-lg px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {deletingProjectId === project.id ? "Deleting..." : "Delete"}
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
       </div>
 
       {showCreate ? (
@@ -407,12 +633,24 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
 
             <div className="grid gap-4 p-6 md:grid-cols-2">
               <div className="md:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-slate-700">Project Name</label>
-                <input type="text" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Website redesign Q2" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300" />
+                <label htmlFor="project-name" className="mb-1 block text-sm font-medium text-slate-700">
+                  Project Name
+                </label>
+                <input
+                  id="project-name"
+                  type="text"
+                  value={newName}
+                  onChange={(event) => setNewName(event.target.value)}
+                  placeholder="Website redesign Q2"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Project ID (Internal)</label>
+                <label htmlFor="project-code" className="mb-1 block text-sm font-medium text-slate-700">
+                  Project ID (Internal)
+                </label>
                 <input
+                  id="project-code"
                   type="text"
                   value={newProjectCode}
                   onChange={(event) => setNewProjectCode(event.target.value)}
@@ -421,8 +659,15 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Execution Status</label>
-                <select value={newStatus} onChange={(event) => setNewStatus(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none focus:border-sky-300">
+                <label htmlFor="project-status" className="mb-1 block text-sm font-medium text-slate-700">
+                  Execution Status
+                </label>
+                <select
+                  id="project-status"
+                  value={newStatus}
+                  onChange={(event) => setNewStatus(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none focus:border-sky-300"
+                >
                   <option value="active">Active</option>
                   <option value="done">Done</option>
                   <option value="blocked">Blocked</option>
@@ -452,6 +697,7 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <input
+                      id="project-assignees"
                       type="text"
                       value={newAssigneeInput}
                       onChange={(event) => setNewAssigneeInput(event.target.value)}
@@ -488,16 +734,80 @@ export default function ProjectsPage({ searchQuery = "" }: ProjectsPageProps) {
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Start Date</label>
-                <input type="date" value={newStartDate} onChange={(event) => setNewStartDate(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300" required />
+                <label htmlFor="project-start-date" className="mb-1 block text-sm font-medium text-slate-700">
+                  Start Date
+                </label>
+                <input
+                  id="project-start-date"
+                  type="date"
+                  value={newStartDate}
+                  onChange={(event) => setNewStartDate(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                  required
+                />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Duration (Days)</label>
-                <input type="number" min={1} value={newDurationDays} onChange={(event) => setNewDurationDays(Number(event.target.value))} placeholder="30" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300" required />
+                <label htmlFor="project-duration-days" className="mb-1 block text-sm font-medium text-slate-700">
+                  Duration (Days)
+                </label>
+                <input
+                  id="project-duration-days"
+                  type="number"
+                  min={1}
+                  value={newDurationDays}
+                  onChange={(event) => setNewDurationDays(Number(event.target.value))}
+                  placeholder="30"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                  required
+                />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Assigned People</label>
-                <input type="number" min={1} value={newTeamSize} onChange={(event) => setNewTeamSize(Number(event.target.value))} placeholder="3" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300" required />
+                <label htmlFor="project-team-size" className="mb-1 block text-sm font-medium text-slate-700">
+                  Assigned People
+                </label>
+                <input
+                  id="project-team-size"
+                  type="number"
+                  min={1}
+                  value={newTeamSize}
+                  onChange={(event) => setNewTeamSize(Number(event.target.value))}
+                  placeholder="3"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                  required
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label htmlFor="project-attachments" className="mb-1 block text-sm font-medium text-slate-700">
+                  Attach documents
+                </label>
+                <input
+                  id="project-attachments"
+                  type="file"
+                  multiple
+                  onChange={(event) => {
+                    const files = event.target.files ? Array.from(event.target.files) : [];
+                    setProjectAttachments(files);
+                  }}
+                  className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-800 hover:file:bg-slate-200"
+                />
+                {projectAttachments.length > 0 ? (
+                  <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                    {projectAttachments.map((file, index) => (
+                      <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-2">
+                        <span className="truncate">{file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setProjectAttachments((prev) => prev.filter((_, i) => i !== index))
+                          }
+                          className="text-[11px] font-medium text-rose-600 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4">

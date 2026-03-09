@@ -203,3 +203,27 @@ func (s *Service) CreateTimesheet(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, item)
 }
+
+func (s *Service) DeleteTimesheet(c *gin.Context) {
+	tenantID := tenantFromContext(c)
+	timesheetID, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
+	if err != nil || timesheetID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid timesheet id"})
+		return
+	}
+
+	commandTag, err := s.DB.Exec(c.Request.Context(), `
+		DELETE FROM timesheets
+		WHERE id = $1 AND tenant_id = $2
+	`, timesheetID, tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "delete failed"})
+		return
+	}
+	if commandTag.RowsAffected() == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "timesheet not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+}

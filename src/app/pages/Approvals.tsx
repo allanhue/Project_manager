@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { actionApprovalRequest, ApprovalRequest, createApprovalRequest, getUserSettings, listApprovalRequests, listProjects, Project, UserSettings } from "../auth/auth";
+import { actionApprovalRequest, ApprovalRequest, createApprovalRequest, deleteApprovalRequest, getUserSettings, listApprovalRequests, listProjects, Project, UserSettings } from "../auth/auth";
 import { LoadingSpinner } from "../componets/LoadingSpinner";
 
 type ApprovalsPageProps = {
@@ -40,6 +40,9 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
   const [projectID, setProjectID] = useState("");
   const [hours, setHours] = useState("");
   const [note, setNote] = useState("");
+
+  const [openMenuApprovalId, setOpenMenuApprovalId] = useState<number | null>(null);
+  const [deletingApprovalId, setDeletingApprovalId] = useState<number | null>(null);
 
   async function loadData() {
     setLoading(true);
@@ -138,11 +141,31 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
     }
   }
 
+  async function onDelete(request: ApprovalRequest) {
+    if (deletingApprovalId !== null) return;
+    setOpenMenuApprovalId(null);
+    if (!window.confirm(`Delete approval request "${request.note}"?`)) return;
+    setError("");
+    setDeletingApprovalId(request.id);
+    try {
+      await deleteApprovalRequest(request.id);
+      setItems((prev) => prev.filter((item) => item.id !== request.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete approval request.");
+    } finally {
+      setDeletingApprovalId(null);
+    }
+  }
+
   return (
     <section className="space-y-4">
       <header className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-        <h2 className="text-lg font-semibold text-slate-900">Approvals</h2>
-        <p className="text-sm text-slate-600">Approval workflow for billable projects and timesheet-related delivery checks.</p>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Approvals</h2>
+            <p className="text-sm text-slate-600">Approval workflow for billable projects and timesheet-related delivery checks.</p>
+          </div>
+        </div>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -177,7 +200,15 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
       <form onSubmit={onCreate} className="rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="mb-3 text-sm font-semibold text-slate-900">Create Approval Request</h3>
         <div className="grid gap-3 md:grid-cols-3">
-          <select value={projectID} onChange={(event) => setProjectID(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none">
+          <label htmlFor="approval-project" className="sr-only">
+            Project
+          </label>
+          <select
+            id="approval-project"
+            value={projectID}
+            onChange={(event) => setProjectID(event.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none"
+          >
             <option value="">Select project</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
@@ -249,7 +280,6 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
           <table className="w-full min-w-[1060px] text-left text-sm">
             <thead className="text-slate-500">
               <tr className="border-b border-slate-200">
-                <th className="px-2 py-2 font-medium">Pick</th>
                 <th className="px-2 py-2 font-medium">Project</th>
                 <th className="px-2 py-2 font-medium">Hours</th>
                 <th className="px-2 py-2 font-medium">Pipeline</th>
@@ -266,6 +296,7 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
                   <td className="px-2 py-3">
                     <input
                       type="checkbox"
+                      aria-label={`Select approval ${item.id} for bulk action`}
                       checked={selectedIDs.includes(item.id)}
                       disabled={item.status !== "pending" || !!actingKey}
                       onChange={(event) =>
@@ -306,6 +337,32 @@ export default function ApprovalsPage({ searchQuery = "" }: ApprovalsPageProps) 
                         {actingKey === `reject-${item.id}` ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-rose-300 border-t-rose-700" /> : null}
                         Reject
                       </button>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setOpenMenuApprovalId((prev) => (prev === item.id ? null : item.id))}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-100"
+                          aria-label={`Open actions for approval ${item.id}`}
+                        >
+                          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                            <circle cx="12" cy="5" r="2" />
+                            <circle cx="12" cy="12" r="2" />
+                            <circle cx="12" cy="19" r="2" />
+                          </svg>
+                        </button>
+                        {openMenuApprovalId === item.id ? (
+                          <div className="absolute right-0 top-10 z-10 w-32 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                            <button
+                              type="button"
+                              onClick={() => void onDelete(item)}
+                              disabled={deletingApprovalId === item.id}
+                              className="block w-full rounded-lg px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {deletingApprovalId === item.id ? "Deleting..." : "Delete"}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </td>
                 </tr>

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { createTimesheet, listProjects, listTasks, listTimesheets, Project, TaskItem, TimesheetEntry, TimesheetSummary } from "../auth/auth";
+import { createTimesheet, listProjects, listTasks, listTimesheets, Project, TaskItem, TimesheetEntry, TimesheetSummary, deleteTimesheet } from "../auth/auth";
 import { LoadingSpinner } from "../componets/LoadingSpinner";
 
 type TimesheetsPageProps = {
@@ -23,6 +23,9 @@ export default function TimesheetsPage({ searchQuery = "" }: TimesheetsPageProps
   const [hours, setHours] = useState("8");
   const [billable, setBillable] = useState(true);
   const [notes, setNotes] = useState("");
+
+  const [openMenuTimesheetId, setOpenMenuTimesheetId] = useState<number | null>(null);
+  const [deletingTimesheetId, setDeletingTimesheetId] = useState<number | null>(null);
 
   async function loadData() {
     setLoading(true);
@@ -58,6 +61,27 @@ export default function TimesheetsPage({ searchQuery = "" }: TimesheetsPageProps
         .includes(q),
     );
   }, [items, searchQuery]);
+
+  async function onDelete(entry: TimesheetEntry) {
+    if (deletingTimesheetId !== null) return;
+    setOpenMenuTimesheetId(null);
+    if (!window.confirm(`Delete timesheet entry for ${entry.work_date}?`)) return;
+    setError("");
+    setDeletingTimesheetId(entry.id);
+    try {
+      await deleteTimesheet(entry.id);
+      setItems((prev) => prev.filter((item) => item.id !== entry.id));
+      // Recalculate summary
+      const newItems = items.filter((item) => item.id !== entry.id);
+      const billable = newItems.filter((i) => i.billable).reduce((sum, i) => sum + i.hours, 0);
+      const nonBillable = newItems.filter((i) => !i.billable).reduce((sum, i) => sum + i.hours, 0);
+      setSummary({ billable_hours: billable, non_billable_hours: nonBillable, total_hours: billable + nonBillable });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete timesheet.");
+    } finally {
+      setDeletingTimesheetId(null);
+    }
+  }
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -97,9 +121,15 @@ export default function TimesheetsPage({ searchQuery = "" }: TimesheetsPageProps
             <h2 className="text-lg font-semibold text-slate-900">Timesheets</h2>
             <p className="text-sm text-slate-600">Track billable and non-billable hours across projects and tasks.</p>
           </div>
-          <button type="button" onClick={() => setShowCreate(true)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-[1px]">
-            Log Hours
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-px"
+            >
+              Log Hours
+            </button>
+          </div>
         </div>
       </header>
 
@@ -133,6 +163,7 @@ export default function TimesheetsPage({ searchQuery = "" }: TimesheetsPageProps
                 <th className="px-2 py-2 font-medium">Type</th>
                 <th className="px-2 py-2 font-medium">Notes</th>
                 <th className="px-2 py-2 font-medium">By</th>
+                <th className="px-2 py-2 font-medium">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -149,6 +180,34 @@ export default function TimesheetsPage({ searchQuery = "" }: TimesheetsPageProps
                   </td>
                   <td className="px-2 py-3 text-slate-700">{entry.notes || "-"}</td>
                   <td className="px-2 py-3 text-slate-700">{entry.created_by_email}</td>
+                  <td className="px-2 py-3">
+                    <div className="relative flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setOpenMenuTimesheetId((prev) => (prev === entry.id ? null : entry.id))}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-100"
+                        aria-label={`Open actions for timesheet ${entry.id}`}
+                      >
+                        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                          <circle cx="12" cy="5" r="2" />
+                          <circle cx="12" cy="12" r="2" />
+                          <circle cx="12" cy="19" r="2" />
+                        </svg>
+                      </button>
+                      {openMenuTimesheetId === entry.id ? (
+                        <div className="absolute right-0 top-11 z-10 w-32 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                          <button
+                            type="button"
+                            onClick={() => void onDelete(entry)}
+                            disabled={deletingTimesheetId === entry.id}
+                            className="block w-full rounded-lg px-3 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {deletingTimesheetId === entry.id ? "Deleting..." : "Delete"}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -165,8 +224,15 @@ export default function TimesheetsPage({ searchQuery = "" }: TimesheetsPageProps
             </div>
             <div className="grid gap-4 p-6 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Project</label>
-                <select value={projectId} onChange={(event) => setProjectId(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300">
+                <label htmlFor="timesheet-project" className="mb-1 block text-sm font-medium text-slate-700">
+                  Project
+                </label>
+                <select
+                  id="timesheet-project"
+                  value={projectId}
+                  onChange={(event) => setProjectId(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+                >
                   <option value="">No project</option>
                   {projects.map((project) => (
                     <option key={project.id} value={project.id}>
@@ -176,8 +242,15 @@ export default function TimesheetsPage({ searchQuery = "" }: TimesheetsPageProps
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Task</label>
-                <select value={taskId} onChange={(event) => setTaskId(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300">
+                <label htmlFor="timesheet-task" className="mb-1 block text-sm font-medium text-slate-700">
+                  Task
+                </label>
+                <select
+                  id="timesheet-task"
+                  value={taskId}
+                  onChange={(event) => setTaskId(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+                >
                   <option value="">No task</option>
                   {filteredTasks.map((task) => (
                     <option key={task.id} value={task.id}>
@@ -187,16 +260,44 @@ export default function TimesheetsPage({ searchQuery = "" }: TimesheetsPageProps
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Date</label>
-                <input type="date" value={workDate} onChange={(event) => setWorkDate(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300" required />
+                <label htmlFor="timesheet-date" className="mb-1 block text-sm font-medium text-slate-700">
+                  Date
+                </label>
+                <input
+                  id="timesheet-date"
+                  type="date"
+                  value={workDate}
+                  onChange={(event) => setWorkDate(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                  required
+                />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Hours</label>
-                <input type="number" min={0.25} max={24} step={0.25} value={hours} onChange={(event) => setHours(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300" required />
+                <label htmlFor="timesheet-hours" className="mb-1 block text-sm font-medium text-slate-700">
+                  Hours
+                </label>
+                <input
+                  id="timesheet-hours"
+                  type="number"
+                  min={0.25}
+                  max={24}
+                  step={0.25}
+                  value={hours}
+                  onChange={(event) => setHours(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-300"
+                  required
+                />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Work Type</label>
-                <select value={billable ? "billable" : "non_billable"} onChange={(event) => setBillable(event.target.value === "billable")} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300">
+                <label htmlFor="timesheet-worktype" className="mb-1 block text-sm font-medium text-slate-700">
+                  Work Type
+                </label>
+                <select
+                  id="timesheet-worktype"
+                  value={billable ? "billable" : "non_billable"}
+                  onChange={(event) => setBillable(event.target.value === "billable")}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-300"
+                >
                   <option value="billable">Billable</option>
                   <option value="non_billable">Non Billable</option>
                 </select>

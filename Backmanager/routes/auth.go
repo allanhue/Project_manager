@@ -324,12 +324,12 @@ func (s *Service) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	tempPassword, err := generateTemporaryPassword(12)
+	resetPassword, err := generatePassword(12)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "password generation failed"})
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(tempPassword), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(resetPassword), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "password hashing failed"})
 		return
@@ -341,10 +341,10 @@ func (s *Service) ForgotPassword(c *gin.Context) {
 
 	subject := "PulseForge password reset"
 	message := fmt.Sprintf(
-		"Hi %s,\n\nYour temporary password for %s is:\n%s\n\nPlease login and change it immediately.",
+		"Hi %s,\n\nYour new password for %s is:\n%s\n\nThis password will stay active until you change it.",
 		name,
 		tenantName,
-		tempPassword,
+		resetPassword,
 	)
 	if err := s.sendMail(context.Background(), req.Email, subject, message); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -359,7 +359,7 @@ func (s *Service) ForgotPassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "if the account exists, a reset email has been sent"})
 }
 
-func generateTemporaryPassword(length int) (string, error) {
+func generatePassword(length int) (string, error) {
 	if length < 8 {
 		length = 8
 	}

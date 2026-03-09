@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ type Task struct {
 	TenantID    string    `json:"tenant_id"`
 	ProjectID   int64     `json:"project_id"`
 	ProjectName string    `json:"project_name,omitempty"`
+	Phase       string    `json:"phase,omitempty"`
 	Title       string    `json:"title"`
 	Status      string    `json:"status"`
 	Priority    string    `json:"priority"`
@@ -28,6 +30,7 @@ type Task struct {
 type createTaskRequest struct {
 	TaskCode  string   `json:"task_code"`
 	ProjectID int64    `json:"project_id" binding:"required,gt=0"`
+	Phase     string   `json:"phase"`
 	Title     string   `json:"title" binding:"required"`
 	Status    string   `json:"status"`
 	Priority  string   `json:"priority"`
@@ -37,6 +40,7 @@ type createTaskRequest struct {
 type updateTaskRequest struct {
 	TaskCode  string   `json:"task_code"`
 	ProjectID int64    `json:"project_id" binding:"required,gt=0"`
+	Phase     string   `json:"phase"`
 	Title     string   `json:"title" binding:"required"`
 	Status    string   `json:"status"`
 	Priority  string   `json:"priority"`
@@ -50,6 +54,7 @@ func (s *Service) EnsureTasksTable() error {
 			task_code TEXT NOT NULL DEFAULT '',
 			tenant_id TEXT NOT NULL,
 			project_id BIGINT REFERENCES projects(id) ON DELETE CASCADE,
+			phase TEXT NOT NULL DEFAULT '',
 			title TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'todo',
 			priority TEXT NOT NULL DEFAULT 'medium',
@@ -58,6 +63,7 @@ func (s *Service) EnsureTasksTable() error {
 		);
 		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS subtasks JSONB NOT NULL DEFAULT '[]'::jsonb;
 		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_code TEXT NOT NULL DEFAULT '';
+		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT '';
 		DO $$
 		BEGIN
 			IF EXISTS (
@@ -98,11 +104,11 @@ func (s *Service) EnsureTasksTable() error {
 func (s *Service) ListTasks(c *gin.Context) {
 	tenantID := tenantFromContext(c)
 	rows, err := s.DB.Query(c.Request.Context(), `
-		SELECT tk.id, COALESCE(tk.task_code, ''), tk.tenant_id, tk.project_id, tk.title, tk.status, tk.priority, COALESCE(tk.subtasks, '[]'::jsonb), tk.created_at, COALESCE(p.name, '')
+		SELECT tk.id, COALESCE(tk.task_code, ''), tk.tenant_id, tk.project_id, COALESCE(tk.phase, ''), tk.title, tk.status, tk.priority, COALESCE(tk.subtasks, '[]'::jsonb), tk.created_at, COALESCE(p.name, '')
 		FROM tasks tk
 		LEFT JOIN projects p ON p.id = tk.project_id
 		WHERE tk.tenant_id = $1
-		ORDER BY tk.id DESC
+		ORDER BY tk.id ASC
 	`, tenantID)
 	// In a real app, you'd want pagination here instead of returning all tasks at once.
 	if err != nil {
@@ -116,7 +122,7 @@ func (s *Service) ListTasks(c *gin.Context) {
 		var item Task
 		var projectID sql.NullInt64
 		var subtasksRaw []byte
-		if err := rows.Scan(&item.ID, &item.TaskCode, &item.TenantID, &projectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt, &item.ProjectName); err != nil {
+		if err := rows.Scan(&item.ID, &item.TaskCode, &item.TenantID, &projectID, &item.Phase, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt, &item.ProjectName); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
 			return
 		}
@@ -146,6 +152,7 @@ func (s *Service) CreateTask(c *gin.Context) {
 	if req.Priority == "" {
 		req.Priority = "medium"
 	}
+	req.Phase = strings.TrimSpace(req.Phase)
 	cleanSubtasks := make([]string, 0, len(req.Subtasks))
 	for _, subtask := range req.Subtasks {
 		t := strings.TrimSpace(subtask)
@@ -172,11 +179,11 @@ func (s *Service) CreateTask(c *gin.Context) {
 	var item Task
 	var subtasksRaw []byte
 	err = s.DB.QueryRow(c.Request.Context(), `
-		INSERT INTO tasks (task_code, tenant_id, project_id, title, status, priority, subtasks)
-		VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
-		RETURNING id, task_code, tenant_id, project_id, title, status, priority, subtasks, created_at
-	`, strings.TrimSpace(req.TaskCode), tenantID, req.ProjectID, req.Title, req.Status, req.Priority, string(subtasksJSON)).
-		Scan(&item.ID, &item.TaskCode, &item.TenantID, &item.ProjectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt)
+		INSERT INTO tasks (task_code, tenant_id, project_id, phase, title, status, priority, subtasks)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+		RETURNING id, task_code, tenant_id, project_id, phase, title, status, priority, subtasks, created_at
+	`, strings.TrimSpace(req.TaskCode), tenantID, req.ProjectID, req.Phase, strings.TrimSpace(req.Title), req.Status, req.Priority, string(subtasksJSON)).
+		Scan(&item.ID, &item.TaskCode, &item.TenantID, &item.ProjectID, &item.Phase, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "insert failed"})
 		return
@@ -211,6 +218,7 @@ func (s *Service) UpdateTask(c *gin.Context) {
 	if strings.TrimSpace(req.Priority) == "" {
 		req.Priority = "medium"
 	}
+	req.Phase = strings.TrimSpace(req.Phase)
 
 	cleanSubtasks := make([]string, 0, len(req.Subtasks))
 	for _, subtask := range req.Subtasks {
@@ -239,11 +247,11 @@ func (s *Service) UpdateTask(c *gin.Context) {
 	var subtasksRaw []byte
 	err = s.DB.QueryRow(c.Request.Context(), `
 		UPDATE tasks
-		SET task_code = $1, project_id = $2, title = $3, status = $4, priority = $5, subtasks = $6::jsonb
-		WHERE id = $7 AND tenant_id = $8
-		RETURNING id, task_code, tenant_id, project_id, title, status, priority, subtasks, created_at
-	`, strings.TrimSpace(req.TaskCode), req.ProjectID, strings.TrimSpace(req.Title), strings.TrimSpace(req.Status), strings.TrimSpace(req.Priority), string(subtasksJSON), taskID, tenantID).
-		Scan(&item.ID, &item.TaskCode, &item.TenantID, &item.ProjectID, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt)
+		SET task_code = $1, project_id = $2, phase = $3, title = $4, status = $5, priority = $6, subtasks = $7::jsonb
+		WHERE id = $8 AND tenant_id = $9
+		RETURNING id, task_code, tenant_id, project_id, phase, title, status, priority, subtasks, created_at
+	`, strings.TrimSpace(req.TaskCode), req.ProjectID, req.Phase, strings.TrimSpace(req.Title), strings.TrimSpace(req.Status), strings.TrimSpace(req.Priority), string(subtasksJSON), taskID, tenantID).
+		Scan(&item.ID, &item.TaskCode, &item.TenantID, &item.ProjectID, &item.Phase, &item.Title, &item.Status, &item.Priority, &subtasksRaw, &item.CreatedAt)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 		return
@@ -251,6 +259,33 @@ func (s *Service) UpdateTask(c *gin.Context) {
 	item.ProjectName = projectName
 	item.Subtasks = cleanSubtasks
 	c.JSON(http.StatusOK, item)
+}
+
+func (s *Service) DeleteTask(c *gin.Context) {
+	tenantID := tenantFromContext(c)
+	taskID, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
+	if err != nil || taskID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task id"})
+		return
+	}
+
+	// Debug logging
+	fmt.Printf("DeleteTask called: tenantID=%s, taskID=%d\n", tenantID, taskID)
+
+	commandTag, err := s.DB.Exec(c.Request.Context(), `
+		DELETE FROM tasks
+		WHERE id = $1 AND tenant_id = $2
+	`, taskID, tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "delete failed"})
+		return
+	}
+	if commandTag.RowsAffected() == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
 }
 
 func parseStringArrayJSON(raw []byte) []string {

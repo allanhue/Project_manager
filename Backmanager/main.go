@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"backmanager/routes"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -78,18 +80,24 @@ func main() {
 		api.PUT("/profile", svc.UpdateUserProfile)
 		api.GET("/projects", svc.ListProjects)
 		api.POST("/projects", svc.CreateProject)
+		api.DELETE("/projects/:id", svc.DeleteProject)
 		api.GET("/tasks", svc.ListTasks)
 		api.POST("/tasks", svc.CreateTask)
 		api.PUT("/tasks/:id", svc.UpdateTask)
+		api.DELETE("/tasks/:id", svc.DeleteTask)
+		fmt.Printf("Registered DELETE /tasks/:id route\n")
 		api.GET("/forum/posts", svc.ListForumPosts)
 		api.POST("/forum/posts", svc.CreateForumPost)
+		api.DELETE("/forum/posts/:id", svc.DeleteForumPost)
 		api.GET("/issues", svc.ListIssues)
 		api.POST("/issues", svc.CreateIssue)
 		api.GET("/timesheets", svc.ListTimesheets)
 		api.POST("/timesheets", svc.CreateTimesheet)
+		api.DELETE("/timesheets/:id", svc.DeleteTimesheet)
 		api.GET("/approvals/requests", svc.ListApprovalRequests)
 		api.POST("/approvals/requests", svc.CreateApprovalRequest)
 		api.PUT("/approvals/requests/:id/action", svc.ActionApprovalRequest)
+		api.DELETE("/approvals/requests/:id", svc.DeleteApprovalRequest)
 		api.POST("/notifications/test", svc.TestNotification)
 		api.GET("/notifications", svc.ListNotifications)
 		api.PUT("/notifications/:id/read", svc.MarkNotificationRead)

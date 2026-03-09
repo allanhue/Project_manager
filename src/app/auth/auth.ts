@@ -48,6 +48,7 @@ export type Project = {
   duration_days: number;
   team_size: number;
   created_at: string;
+  attachments?: string[];
 };
 
 export type TaskItem = {
@@ -56,11 +57,13 @@ export type TaskItem = {
   tenant_id: string;
   project_id: number;
   project_name?: string;
+  phase?: string;
   title: string;
   status: string;
   priority: string;
   subtasks: string[];
   created_at: string;
+  attachments?: string[];
 };
 
 export type TimesheetEntry = {
@@ -430,6 +433,7 @@ export async function createProject(input: {
   start_date: string;
   duration_days: number;
   team_size: number;
+  attachments?: string[];
 }): Promise<Project> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
@@ -452,6 +456,7 @@ export async function updateProject(input: {
   start_date: string;
   duration_days: number;
   team_size: number;
+  attachments?: string[];
 }): Promise<Project> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
@@ -469,7 +474,17 @@ export async function updateProject(input: {
       start_date: input.start_date,
       duration_days: input.duration_days,
       team_size: input.team_size,
+      attachments: input.attachments || [],
     }),
+  });
+}
+
+export async function deleteProject(id: number): Promise<{ status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ status: string }>(`/api/v1/projects/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 
@@ -489,7 +504,9 @@ export async function createTask(input: {
   status?: string;
   priority?: string;
   project_id: number;
+  phase?: string;
   subtasks?: string[];
+  attachments?: string[];
 }): Promise<TaskItem> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
@@ -510,7 +527,9 @@ export async function updateTask(input: {
   status?: string;
   priority?: string;
   project_id: number;
+  phase?: string;
   subtasks?: string[];
+  attachments?: string[];
 }): Promise<TaskItem> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
@@ -526,8 +545,19 @@ export async function updateTask(input: {
       status: input.status,
       priority: input.priority,
       project_id: input.project_id,
+      phase: input.phase || "",
       subtasks: input.subtasks || [],
+      attachments: input.attachments || [],
     }),
+  });
+}
+
+export async function deleteTask(id: number): Promise<{ status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ status: string }>(`/api/v1/tasks/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 
@@ -568,6 +598,33 @@ export async function createTimesheet(input: {
       billable: input.billable,
       notes: input.notes || "",
     }),
+  });
+}
+
+export async function deleteTimesheet(id: number): Promise<{ status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ status: string }>(`/api/v1/timesheets/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function deleteApprovalRequest(id: number): Promise<{ status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ status: string }>(`/api/v1/approvals/requests/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function deleteForumPost(id: number): Promise<{ status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ status: string }>(`/api/v1/forum/posts/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 

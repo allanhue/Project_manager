@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,4 +73,28 @@ func (s *Service) CreateForumPost(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, item)
+}
+
+func (s *Service) DeleteForumPost(c *gin.Context) {
+	tenantID := tenantFromContext(c)
+	postID, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
+	if err != nil || postID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid forum post id"})
+		return
+	}
+
+	commandTag, err := s.DB.Exec(c.Request.Context(), `
+		DELETE FROM forum_posts
+		WHERE id = $1 AND tenant_id = $2
+	`, postID, tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "delete failed"})
+		return
+	}
+	if commandTag.RowsAffected() == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "forum post not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
 }

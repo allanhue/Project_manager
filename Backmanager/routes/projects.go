@@ -261,7 +261,7 @@ func (s *Service) ListProjects(c *gin.Context) {
 		SELECT id, COALESCE(project_code, ''), tenant_id, name, status, COALESCE(assignees, '[]'::jsonb), start_date, due_date, duration_days, team_size, created_at
 		FROM projects
 		WHERE tenant_id = $1
-		ORDER BY id DESC
+		ORDER BY id ASC
 	`, tenantID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "query failed"})
@@ -410,4 +410,28 @@ func (s *Service) UpdateProject(c *gin.Context) {
 			detail,
 		)
 	}
+}
+
+func (s *Service) DeleteProject(c *gin.Context) {
+	tenantID := tenantFromContext(c)
+	projectID, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
+	if err != nil || projectID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
+		return
+	}
+
+	commandTag, err := s.DB.Exec(c.Request.Context(), `
+		DELETE FROM projects
+		WHERE id = $1 AND tenant_id = $2
+	`, projectID, tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "delete failed"})
+		return
+	}
+	if commandTag.RowsAffected() == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
 }
