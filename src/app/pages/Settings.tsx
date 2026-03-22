@@ -22,7 +22,7 @@ const defaultSettings: UserSettings = {
 };
 
 const weekDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
-const timezones = ["UTC", "Africa/Nairobi", "Europe/London", "America/New_York", "America/Chicago", "America/Los_Angeles", "Asia/Dubai", "Asia/Kolkata"];
+const timezones = ["UTC", "Africa/Nairobi", "Europe/London", "America/New York", "America/Chicago", "America/Los Angeles", "Asia/Dubai", "Asia/Kolkata"];
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
