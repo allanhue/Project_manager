@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppNotification, NotificationSummary, listNotifications, markNotificationRead, sendSupportRequest } from "../auth/auth";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "approvals" | "forum" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "approvals" | "forum" | "devshare" | "issues" | "profile" | "settings" | "admin";
 
 const titles: Record<PageKey, string> = {
   dashboard: "Dashboard",
@@ -15,6 +15,7 @@ const titles: Record<PageKey, string> = {
   calendar: "Calendar",
   approvals: "Approvals",
   forum: "Forum",
+  devshare: "Dev Share",
   issues: "Issues",
   profile: "Profile",
   settings: "Settings",
@@ -101,6 +102,7 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
           { key: "approvals", label: "Approvals" },
           { key: "reports", label: "Reports" },
           { key: "forum", label: "Forum" },
+          { key: "devshare", label: "Dev Share" },
           { key: "issues", label: "Issues" },
           { key: "profile", label: "Profile" },
           { key: "settings", label: "Settings" },
@@ -143,6 +145,8 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
             ? "Search approval requests..."
           : currentPage === "forum"
             ? "Search forum posts..."
+            : currentPage === "devshare"
+              ? "Search code shares..."
             : currentPage === "issues"
               ? "Search issues..."
               : "Search this module...";

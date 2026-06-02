@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { listProjects, Project } from "../auth/auth";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "approvals" | "forum" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "approvals" | "forum" | "devshare" | "issues" | "profile" | "settings" | "admin";
 
 const menu: Array<{ key: PageKey; label: string; icon: ReactNode }> = [
   {
@@ -102,6 +102,17 @@ const menu: Array<{ key: PageKey; label: string; icon: ReactNode }> = [
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M4 5h16v10H8l-4 4z" />
+      </svg>
+    ),
+  },
+  {
+    key: "devshare",
+    label: "Dev Share",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="m8 9-4 3 4 3" />
+        <path d="m16 9 4 3-4 3" />
+        <path d="m14 5-4 14" />
       </svg>
     ),
   },

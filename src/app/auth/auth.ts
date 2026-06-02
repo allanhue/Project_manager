@@ -150,6 +150,18 @@ export type ForumPost = {
   created_at: string;
 };
 
+export type CodeShare = {
+  id: number;
+  tenant_id: string;
+  author_email: string;
+  title: string;
+  body: string;
+  language: string;
+  code: string;
+  created_at: string;
+  updated_at?: string | null;
+};
+
 export type IssueItem = {
   id: number;
   tenant_id: string;
@@ -628,6 +640,15 @@ export async function deleteForumPost(id: number): Promise<{ status: string }> {
   });
 }
 
+export async function deleteCodeShare(id: number): Promise<{ status: string }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<{ status: string }>(`/api/v1/code-shares/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export async function listUsers(): Promise<TenantUser[]> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
@@ -725,6 +746,47 @@ export async function createForumPost(input: { title: string; body: string }): P
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(input),
+  });
+}
+
+export async function listCodeShares(): Promise<CodeShare[]> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: CodeShare[] }>("/api/v1/code-shares", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return payload.items || [];
+}
+
+export async function createCodeShare(input: { title: string; body: string; language: string; code: string }): Promise<CodeShare> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<CodeShare>("/api/v1/code-shares", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateCodeShare(input: { id: number; title: string; body: string; language: string; code: string }): Promise<CodeShare> {
+  const token = getAuthToken();
+  if (!token) throw new Error("Please login first.");
+  return requestJSON<CodeShare>(`/api/v1/code-shares/${input.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      title: input.title,
+      body: input.body,
+      language: input.language,
+      code: input.code,
+    }),
   });
 }
 

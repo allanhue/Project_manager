@@ -158,6 +158,20 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_forum_posts_tenant_id ON forum_posts (tenant_id);
 
+		CREATE TABLE IF NOT EXISTS code_shares (
+			id BIGSERIAL PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			author_email TEXT NOT NULL,
+			title TEXT NOT NULL,
+			body TEXT NOT NULL DEFAULT '',
+			language TEXT NOT NULL,
+			code TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ
+		);
+		CREATE INDEX IF NOT EXISTS idx_code_shares_tenant_id ON code_shares (tenant_id);
+		CREATE INDEX IF NOT EXISTS idx_code_shares_updated_at ON code_shares (tenant_id, (COALESCE(updated_at, created_at)) DESC);
+
 		CREATE TABLE IF NOT EXISTS issues (
 			id BIGSERIAL PRIMARY KEY,
 			tenant_id TEXT NOT NULL,
