@@ -103,7 +103,7 @@ export default function AuthPage() {
             <h2 className="mt-2 text-3xl font-semibold leading-tight">PulseForge ideal  Workspace</h2>
             <p className="mt-3 max-w-md text-sm text-slate-200">
               {mode === "login"
-                ? "Sign in to continue managing projects, analytics and tenant operations."
+                ? "Sign in to continue managing projects, analytics and administrative operations."
                 : "Register your organization with logo branding and start onboarding your team."}
             </p>
           </div>
