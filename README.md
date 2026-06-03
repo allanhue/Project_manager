@@ -1,5 +1,6 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-
+Project Management System 
+It  workplace management system ideal for for ognaisations thats require sharing of tasks and projects phases overview
+Built with admin capabilities and user features .
 ## Getting Started
 
 First, run the development server:
