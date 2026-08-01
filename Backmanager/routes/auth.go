@@ -38,12 +38,118 @@ type forgotPasswordRequest struct {
 	Email      string `json:"email" binding:"required,email"`
 }
 
+type resetPasswordRequest struct {
+	TenantSlug  string `json:"tenant_slug"`
+	Email       string `json:"email" binding:"required,email"`
+	OTP         string `json:"otp" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=6"`
+}
+
+type registerOTPRequest struct {
+	TenantSlug     string `json:"tenant_slug" binding:"required"`
+	TenantName     string `json:"tenant_name" binding:"required"`
+	TenantLogoData string `json:"tenant_logo_data"`
+	TenantLogoURL  string `json:"tenant_logo_url"`
+	Name           string `json:"name" binding:"required"`
+	Email          string `json:"email" binding:"required,email"`
+	Password       string `json:"password" binding:"required,min=6"`
+}
+
+type registerVerifyRequest struct {
+	TenantSlug     string `json:"tenant_slug" binding:"required"`
+	TenantName     string `json:"tenant_name" binding:"required"`
+	TenantLogoData string `json:"tenant_logo_data"`
+	TenantLogoURL  string `json:"tenant_logo_url"`
+	Name           string `json:"name" binding:"required"`
+	Email          string `json:"email" binding:"required,email"`
+	Password       string `json:"password" binding:"required,min=6"`
+	OTP            string `json:"otp" binding:"required"`
+}
+
 func (s *Service) Register(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
+
+	req.TenantSlug = normalizeSlug(req.TenantSlug)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Name = strings.TrimSpace(req.Name)
+	req.TenantName = strings.TrimSpace(req.TenantName)
+	req.TenantLogoData = strings.TrimSpace(req.TenantLogoData)
+	req.TenantLogoURL = strings.TrimSpace(req.TenantLogoURL)
+
+	c.JSON(http.StatusBadRequest, gin.H{"error": "email verification required before account creation"})
+}
+
+func (s *Service) RequestRegisterOTP(c *gin.Context) {
+	var req registerOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	normalized := registerRequest(req)
+	if err := s.validateRegistrationPayload(c, &normalized); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	code, err := generateOTP()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "OTP generation failed"})
+		return
+	}
+	if err := s.storeOTP(c.Request.Context(), "register", normalized.TenantSlug, normalized.Email, code); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "OTP storage failed"})
+		return
+	}
+
+	subject := "PulseForge email verification OTP"
+	message := fmt.Sprintf(
+		"Hi %s,\n\nUse this OTP to verify your email and create your %s workspace:\n%s\n\nThis OTP expires in 10 minutes.",
+		normalized.Name,
+		normalized.TenantName,
+		code,
+	)
+	if err := s.sendMail(context.Background(), normalized.Email, subject, message); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "verification OTP sent"})
+}
+
+func (s *Service) VerifyRegisterOTP(c *gin.Context) {
+	var req registerVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+
+	normalized := registerRequest{
+		TenantSlug:     req.TenantSlug,
+		TenantName:     req.TenantName,
+		TenantLogoData: req.TenantLogoData,
+		TenantLogoURL:  req.TenantLogoURL,
+		Name:           req.Name,
+		Email:          req.Email,
+		Password:       req.Password,
+	}
+	if err := s.validateRegistrationPayload(c, &normalized); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := s.consumeOTP(c.Request.Context(), "register", normalized.TenantSlug, normalized.Email, req.OTP); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	s.createVerifiedAccount(c, normalized)
+}
+
+func (s *Service) createVerifiedAccount(c *gin.Context, req registerRequest) {
 
 	req.TenantSlug = normalizeSlug(req.TenantSlug)
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
@@ -292,25 +398,22 @@ func (s *Service) ForgotPassword(c *gin.Context) {
 	req.TenantSlug = normalizeSlug(req.TenantSlug)
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 
-	tx, err := s.DB.Begin(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "transaction failed"})
-		return
-	}
-	defer tx.Rollback(c.Request.Context())
-
 	var userID int64
 	var name string
 	var tenantName string
 	if req.TenantSlug != "" {
-		err = tx.QueryRow(c.Request.Context(), `
+		err := s.DB.QueryRow(c.Request.Context(), `
 			SELECT u.id, u.name, t.name
 			FROM users u
 			JOIN tenants t ON t.id = u.tenant_id
 			WHERE t.slug = $1 AND lower(u.email) = lower($2)
 		`, req.TenantSlug, req.Email).Scan(&userID, &name, &tenantName)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"status": "if the account exists, an OTP has been sent"})
+			return
+		}
 	} else {
-		err = tx.QueryRow(c.Request.Context(), `
+		err := s.DB.QueryRow(c.Request.Context(), `
 			SELECT u.id, u.name, t.name
 			FROM users u
 			JOIN tenants t ON t.id = u.tenant_id
@@ -318,61 +421,192 @@ func (s *Service) ForgotPassword(c *gin.Context) {
 			ORDER BY u.id DESC
 			LIMIT 1
 		`, req.Email).Scan(&userID, &name, &tenantName)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"status": "if the account exists, an OTP has been sent"})
+			return
+		}
 	}
+
+	code, err := generateOTP()
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"status": "if the account exists, a reset email has been sent"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "OTP generation failed"})
+		return
+	}
+	if err := s.storeOTP(c.Request.Context(), "password_reset", req.TenantSlug, req.Email, code); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "OTP storage failed"})
 		return
 	}
 
-	resetPassword, err := generatePassword(12)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "password generation failed"})
-		return
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(resetPassword), bcrypt.DefaultCost)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "password hashing failed"})
-		return
-	}
-	if _, err := tx.Exec(c.Request.Context(), `UPDATE users SET password_hash = $1 WHERE id = $2`, string(hash), userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "password update failed"})
-		return
-	}
-
-	subject := "PulseForge password reset"
+	subject := "PulseForge password reset OTP"
 	message := fmt.Sprintf(
-		"Hi %s,\n\nYour new password for %s is:\n%s\n\nThis password will stay active until you change it.",
+		"Hi %s,\n\nUse this OTP to reset your password for %s:\n%s\n\nThis OTP expires in 10 minutes.",
 		name,
 		tenantName,
-		resetPassword,
+		code,
 	)
 	if err := s.sendMail(context.Background(), req.Email, subject, message); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := tx.Commit(c.Request.Context()); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "commit failed"})
+	c.JSON(http.StatusOK, gin.H{"status": "if the account exists, an OTP has been sent"})
+}
+
+func (s *Service) ResetPassword(c *gin.Context) {
+	var req resetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload", "detail": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "if the account exists, a reset email has been sent"})
+	req.TenantSlug = normalizeSlug(req.TenantSlug)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+
+	var userID int64
+	var err error
+	if req.TenantSlug != "" {
+		err = s.DB.QueryRow(c.Request.Context(), `
+			SELECT u.id
+			FROM users u
+			JOIN tenants t ON t.id = u.tenant_id
+			WHERE t.slug = $1 AND lower(u.email) = lower($2)
+		`, req.TenantSlug, req.Email).Scan(&userID)
+	} else {
+		err = s.DB.QueryRow(c.Request.Context(), `
+			SELECT u.id
+			FROM users u
+			WHERE lower(u.email) = lower($1)
+			ORDER BY u.id DESC
+			LIMIT 1
+		`, req.Email).Scan(&userID)
+	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired OTP"})
+		return
+	}
+
+	if err := s.consumeOTP(c.Request.Context(), "password_reset", req.TenantSlug, req.Email, req.OTP); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "password hashing failed"})
+		return
+	}
+	if _, err := s.DB.Exec(c.Request.Context(), `UPDATE users SET password_hash = $1 WHERE id = $2`, string(hash), userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "password update failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "password reset complete"})
 }
 
-func generatePassword(length int) (string, error) {
-	if length < 8 {
-		length = 8
+func (s *Service) validateRegistrationPayload(c *gin.Context, req *registerRequest) error {
+	req.TenantSlug = normalizeSlug(req.TenantSlug)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Name = strings.TrimSpace(req.Name)
+	req.TenantName = strings.TrimSpace(req.TenantName)
+	req.TenantLogoData = strings.TrimSpace(req.TenantLogoData)
+	req.TenantLogoURL = strings.TrimSpace(req.TenantLogoURL)
+
+	if req.TenantSlug == "" || req.TenantName == "" || req.Name == "" || req.Email == "" || len(req.Password) < 6 {
+		return errors.New("invalid payload")
 	}
-	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$%*"
-	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
+	tenantLogo := req.TenantLogoData
+	if tenantLogo == "" {
+		tenantLogo = req.TenantLogoURL
+	}
+	if tenantLogo != "" {
+		isUpload := strings.HasPrefix(tenantLogo, "data:image/")
+		isLegacyURL := strings.HasPrefix(tenantLogo, "http://") || strings.HasPrefix(tenantLogo, "https://")
+		if !isUpload && !isLegacyURL {
+			return errors.New("invalid logo upload format")
+		}
+		if len(tenantLogo) > 2_800_000 {
+			return errors.New("logo image too large")
+		}
+	}
+
+	var existingTenantSlug string
+	if err := s.DB.QueryRow(c.Request.Context(), `
+		SELECT slug
+		FROM tenants
+		WHERE lower(name) = lower($1) OR slug = $2
+		LIMIT 1
+	`, req.TenantName, req.TenantSlug).Scan(&existingTenantSlug); err == nil {
+		return errors.New("organization already exists")
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return errors.New("organization lookup failed")
+	}
+
+	var existingUserID int64
+	if err := s.DB.QueryRow(c.Request.Context(), `
+		SELECT id
+		FROM users
+		WHERE lower(email) = lower($1)
+		LIMIT 1
+	`, req.Email).Scan(&existingUserID); err == nil {
+		return errors.New("email already exists")
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return errors.New("email lookup failed")
+	}
+
+	return nil
+}
+
+func generateOTP() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
 		return "", err
 	}
-	out := make([]byte, length)
-	for i, b := range bytes {
-		out[i] = alphabet[int(b)%len(alphabet)]
+	return fmt.Sprintf("%06d", n.Int64()), nil
+}
+
+func (s *Service) storeOTP(ctx context.Context, purpose, tenantSlug, email, code string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(code), bcrypt.DefaultCost)
+	if err != nil {
+		return err
 	}
-	return string(out), nil
+	_, err = s.DB.Exec(ctx, `
+		INSERT INTO auth_otps (purpose, tenant_slug, email, code_hash, attempts, expires_at, consumed_at)
+		VALUES ($1, $2, $3, $4, 0, NOW() + INTERVAL '10 minutes', NULL)
+		ON CONFLICT (purpose, tenant_slug, email)
+		DO UPDATE SET code_hash = EXCLUDED.code_hash, attempts = 0, expires_at = EXCLUDED.expires_at, consumed_at = NULL, created_at = NOW()
+	`, purpose, normalizeSlug(tenantSlug), strings.ToLower(strings.TrimSpace(email)), string(hash))
+	return err
+}
+
+func (s *Service) consumeOTP(ctx context.Context, purpose, tenantSlug, email, code string) error {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return errors.New("invalid or expired OTP")
+	}
+
+	var id int64
+	var hash string
+	var attempts int
+	var expiresAt time.Time
+	var consumedAt sql.NullTime
+	err := s.DB.QueryRow(ctx, `
+		SELECT id, code_hash, attempts, expires_at, consumed_at
+		FROM auth_otps
+		WHERE purpose = $1 AND tenant_slug = $2 AND email = $3
+	`, purpose, normalizeSlug(tenantSlug), strings.ToLower(strings.TrimSpace(email))).Scan(&id, &hash, &attempts, &expiresAt, &consumedAt)
+	if err != nil {
+		return errors.New("invalid or expired OTP")
+	}
+	if consumedAt.Valid || attempts >= 5 || time.Now().After(expiresAt) {
+		return errors.New("invalid or expired OTP")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(code)); err != nil {
+		_, _ = s.DB.Exec(ctx, `UPDATE auth_otps SET attempts = attempts + 1 WHERE id = $1`, id)
+		return errors.New("invalid or expired OTP")
+	}
+
+	_, err = s.DB.Exec(ctx, `UPDATE auth_otps SET consumed_at = NOW() WHERE id = $1`, id)
+	return err
 }
 
 func (s *Service) issueToken(userID, tenantSlug, email, name, tenantName, tenantLogo, role string) (string, error) {

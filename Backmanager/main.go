@@ -64,8 +64,11 @@ func main() {
 	auth := r.Group("/api/v1/auth")
 	{
 		auth.POST("/register", svc.Register)
+		auth.POST("/register/request-otp", svc.RequestRegisterOTP)
+		auth.POST("/register/verify", svc.VerifyRegisterOTP)
 		auth.POST("/login", svc.Login)
 		auth.POST("/forgot-password", svc.ForgotPassword)
+		auth.POST("/reset-password", svc.ResetPassword)
 	}
 
 	api := r.Group("/api/v1")

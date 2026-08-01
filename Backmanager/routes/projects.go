@@ -122,6 +122,21 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 		CREATE INDEX IF NOT EXISTS idx_projects_tenant_id ON projects (tenant_id);
 		CREATE INDEX IF NOT EXISTS idx_users_tenant_email ON users (tenant_id, email);
 
+		CREATE TABLE IF NOT EXISTS auth_otps (
+			id BIGSERIAL PRIMARY KEY,
+			purpose TEXT NOT NULL,
+			tenant_slug TEXT NOT NULL DEFAULT '',
+			email TEXT NOT NULL,
+			code_hash TEXT NOT NULL,
+			attempts INT NOT NULL DEFAULT 0,
+			expires_at TIMESTAMPTZ NOT NULL,
+			consumed_at TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (purpose, tenant_slug, email)
+		);
+		CREATE INDEX IF NOT EXISTS idx_auth_otps_lookup ON auth_otps (purpose, tenant_slug, email);
+		CREATE INDEX IF NOT EXISTS idx_auth_otps_expires_at ON auth_otps (expires_at);
+
 		CREATE TABLE IF NOT EXISTS system_logs (
 			id BIGSERIAL PRIMARY KEY,
 			tenant_slug TEXT,

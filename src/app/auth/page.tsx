@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { forgotPassword, loginUser, registerUser } from "./auth";
+import { forgotPassword, loginUser, requestRegistrationOTP, resetPassword, verifyRegistrationOTP } from "./auth";
 
 type Mode = "login" | "register";
 
@@ -16,6 +16,10 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [registerOtpSent, setRegisterOtpSent] = useState(false);
+  const [registerOtp, setRegisterOtp] = useState("");
+  const [resetOtpSent, setResetOtpSent] = useState(false);
+  const [resetOtp, setResetOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotMessage, setForgotMessage] = useState("");
@@ -30,26 +34,75 @@ export default function AuthPage() {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setForgotMessage("");
+    if (!isValidEmail(email)) {
+      setError("Enter a valid email address.");
+      return;
+    }
     setLoading(true);
 
-    const result =
-      mode === "login"
-        ? await loginUser({ email, password })
-        : await registerUser({ tenantSlug, tenantName, tenantLogoData, name, email, password });
+    if (mode === "login" && resetOtpSent) {
+      const result = await resetPassword({ email, tenantSlug: tenantSlug || "", otp: resetOtp, newPassword: password });
+      setLoading(false);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setPassword("");
+      setResetOtp("");
+      setResetOtpSent(false);
+      setForgotMessage("Password reset complete. Sign in with your new password.");
+      return;
+    }
+
+    if (mode === "login") {
+      const result = await loginUser({ email, password });
+      setLoading(false);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      router.push("/");
+      return;
+    }
+
+    if (!registerOtpSent) {
+      const result = await requestRegistrationOTP({ tenantSlug, tenantName, tenantLogoData, name, email, password });
+      setLoading(false);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setRegisterOtpSent(true);
+      setForgotMessage(result.message);
+      return;
+    }
+
+    const result = await verifyRegistrationOTP({ tenantSlug, tenantName, tenantLogoData, name, email, password, otp: registerOtp });
 
     setLoading(false);
     if (!result.ok) {
       setError(result.message);
       return;
     }
-    router.push("/");
+    setMode("login");
+    setPassword("");
+    setRegisterOtp("");
+    setRegisterOtpSent(false);
+    setForgotMessage("Account verified and created. Sign in to continue.");
   }
 
   async function onForgotPassword() {
     setError("");
     setForgotMessage("");
+    setResetOtpSent(false);
+    setResetOtp("");
     if (!email.trim()) {
       setError("Enter email first.");
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setError("Enter a valid email address.");
       return;
     }
 
@@ -61,6 +114,8 @@ export default function AuthPage() {
       return;
     }
     setForgotMessage(result.message);
+    setResetOtpSent(true);
+    setPassword("");
   }
 
   async function onPickLogo(file: File | null) {
@@ -114,14 +169,26 @@ export default function AuthPage() {
             <div className="mb-6 grid grid-cols-2 rounded-xl bg-slate-100 p-1 text-sm">
               <button
                 type="button"
-                onClick={() => setMode("login")}
+                onClick={() => {
+                  setMode("login");
+                  setRegisterOtpSent(false);
+                  setRegisterOtp("");
+                  setError("");
+                  setForgotMessage("");
+                }}
                 className={`rounded-lg px-3 py-2 ${mode === "login" ? "bg-white font-semibold text-slate-900 shadow-sm" : "text-slate-600"}`}
               >
                 Login
               </button>
               <button
                 type="button"
-                onClick={() => setMode("register")}
+                onClick={() => {
+                  setMode("register");
+                  setResetOtpSent(false);
+                  setResetOtp("");
+                  setError("");
+                  setForgotMessage("");
+                }}
                 className={`rounded-lg px-3 py-2 ${mode === "register" ? "bg-white font-semibold text-slate-900 shadow-sm" : "text-slate-600"}`}
               >
                 Register
@@ -139,7 +206,11 @@ export default function AuthPage() {
                 <input
                   type="text"
                   value={tenantSlug}
-                  onChange={(event) => setTenantSlug(event.target.value)}
+                  onChange={(event) => {
+                    setTenantSlug(event.target.value);
+                    setRegisterOtpSent(false);
+                    setResetOtpSent(false);
+                  }}
                   required
                   placeholder="WikipA-LC"
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
@@ -149,7 +220,10 @@ export default function AuthPage() {
                 <input
                   type="text"
                   value={tenantName}
-                  onChange={(event) => setTenantName(event.target.value)}
+                  onChange={(event) => {
+                    setTenantName(event.target.value);
+                    setRegisterOtpSent(false);
+                  }}
                   required
                   placeholder="WikipA-LC"
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
@@ -180,7 +254,10 @@ export default function AuthPage() {
                 <input
                   type="text"
                   value={name}
-                  onChange={(event) => setName(event.target.value)}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    setRegisterOtpSent(false);
+                  }}
                   required
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
                 />
@@ -191,17 +268,56 @@ export default function AuthPage() {
             <input
               type="email"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setRegisterOtpSent(false);
+                setResetOtpSent(false);
+              }}
               required
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
             />
 
-            <label className="mt-4 block text-sm font-medium text-slate-700">Password</label>
+            {mode === "register" && registerOtpSent ? (
+              <>
+                <label className="mt-4 block text-sm font-medium text-slate-700">Email OTP</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={registerOtp}
+                  onChange={(event) => setRegisterOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                  minLength={6}
+                  maxLength={6}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
+                />
+              </>
+            ) : null}
+
+            {mode === "login" && resetOtpSent ? (
+              <>
+                <label className="mt-4 block text-sm font-medium text-slate-700">Email OTP</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={resetOtp}
+                  onChange={(event) => setResetOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                  minLength={6}
+                  maxLength={6}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
+                />
+              </>
+            ) : null}
+
+            <label className="mt-4 block text-sm font-medium text-slate-700">{resetOtpSent ? "New Password" : "Password"}</label>
             <div className="mt-1 flex gap-2">
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  if (mode === "register") setRegisterOtpSent(false);
+                }}
                 required
                 minLength={6}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-400"
@@ -248,11 +364,23 @@ export default function AuthPage() {
               disabled={loading}
               className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
             >
-              {loading ? "Please wait..." : mode === "login" ? "Sign In" : "Create Account"}
+              {loading
+                ? "Please wait..."
+                : resetOtpSent
+                  ? "Reset Password"
+                  : mode === "login"
+                    ? "Sign In"
+                    : registerOtpSent
+                      ? "Verify & Create Account"
+                      : "Send Verification OTP"}
             </button>
           </form>
         </section>
       </div>
     </main>
   );
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }

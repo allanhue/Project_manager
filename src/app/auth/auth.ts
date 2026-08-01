@@ -36,6 +36,15 @@ type ForgotPasswordInput = {
   email: string;
 };
 
+type ResetPasswordInput = ForgotPasswordInput & {
+  otp: string;
+  newPassword: string;
+};
+
+type RegisterOTPInput = RegisterInput & {
+  otp?: string;
+};
+
 export type Project = {
   id: number;
   project_code?: string;
@@ -384,6 +393,60 @@ export async function registerUser(input: RegisterInput): Promise<{ ok: true; us
   }
 }
 
+export async function requestRegistrationOTP(input: RegisterInput): Promise<{ ok: true; message: string } | { ok: false; message: string }> {
+  try {
+    const payload = await requestJSON<{ status?: string }>("/api/v1/auth/register/request-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenant_slug: input.tenantSlug,
+        tenant_name: input.tenantName,
+        tenant_logo_data: input.tenantLogoData || "",
+        name: input.name,
+        email: input.email,
+        password: input.password,
+      }),
+    });
+    return { ok: true, message: payload.status || "Verification OTP sent." };
+  } catch (error) {
+    return { ok: false, message: normalizeError(error) };
+  }
+}
+
+export async function verifyRegistrationOTP(input: RegisterOTPInput): Promise<{ ok: true; user: AuthUser } | { ok: false; message: string }> {
+  try {
+    const payload = await requestJSON<{
+      token: string;
+      user: { id: string; name: string; email: string; tenant_slug: string; tenant_name?: string; tenant_logo?: string; role?: "system_admin" | "org_admin" };
+    }>("/api/v1/auth/register/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenant_slug: input.tenantSlug,
+        tenant_name: input.tenantName,
+        tenant_logo_data: input.tenantLogoData || "",
+        name: input.name,
+        email: input.email,
+        password: input.password,
+        otp: input.otp || "",
+      }),
+    });
+
+    const user: AuthUser = {
+      id: String(payload.user.id),
+      name: payload.user.name,
+      email: payload.user.email,
+      tenantSlug: payload.user.tenant_slug,
+      tenantName: payload.user.tenant_name || input.tenantName,
+      tenantLogoUrl: payload.user.tenant_logo || input.tenantLogoData || "",
+      role: payload.user.role || "org_admin",
+    };
+    return { ok: true, user };
+  } catch (error) {
+    return { ok: false, message: normalizeError(error) };
+  }
+}
+
 export async function loginUser(input: LoginInput): Promise<{ ok: true; user: AuthUser } | { ok: false; message: string }> {
   try {
     const payload = await requestJSON<{
@@ -421,7 +484,25 @@ export async function forgotPassword(input: ForgotPasswordInput): Promise<{ ok: 
         email: input.email,
       }),
     });
-    return { ok: true, message: payload.status || "If the account exists, a reset email has been sent." };
+    return { ok: true, message: payload.status || "If the account exists, an OTP has been sent." };
+  } catch (error) {
+    return { ok: false, message: normalizeError(error) };
+  }
+}
+
+export async function resetPassword(input: ResetPasswordInput): Promise<{ ok: true; message: string } | { ok: false; message: string }> {
+  try {
+    const payload = await requestJSON<{ status?: string }>("/api/v1/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenant_slug: input.tenantSlug || "",
+        email: input.email,
+        otp: input.otp,
+        new_password: input.newPassword,
+      }),
+    });
+    return { ok: true, message: payload.status || "Password reset complete." };
   } catch (error) {
     return { ok: false, message: normalizeError(error) };
   }
