@@ -33,7 +33,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
-!Backmanager/.env.example
+!server/.env.example
 
 # vercel
 .vercel
@@ -43,5 +43,5 @@ yarn-error.log*
 next-env.d.ts
 
 # go binaries
-Backmanager/*.exe
-Backmanager/backmanager
+server/*.exe
+server/backmanager

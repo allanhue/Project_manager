@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"backmanager/routes"
+	"server/routes"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
