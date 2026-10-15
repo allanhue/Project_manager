@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppNotification, NotificationSummary, listNotifications, markNotificationRead, sendSupportRequest } from "../auth/auth";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "approvals" | "forum" | "devshare" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "approvals" | "forum" | "devshare" | "issues" | "account" | "profile" | "settings" | "admin";
 
 const titles: Record<PageKey, string> = {
   dashboard: "Dashboard",
@@ -17,6 +17,7 @@ const titles: Record<PageKey, string> = {
   forum: "Forum",
   devshare: "Dev Share",
   issues: "Issues",
+  account: "Account",
   profile: "Profile",
   settings: "Settings",
   admin: "Admin",
@@ -104,6 +105,7 @@ export function Nav({ currentPage, onNavigate, userName, orgId, role, isSystemAd
           { key: "forum", label: "Forum" },
           { key: "devshare", label: "Dev Share" },
           { key: "issues", label: "Issues" },
+          { key: "account", label: "Account" },
           { key: "profile", label: "Profile" },
           { key: "settings", label: "Settings" },
         ];

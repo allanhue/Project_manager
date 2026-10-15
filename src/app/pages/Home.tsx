@@ -1,28 +1,7 @@
 "use client";
 
 import Link from "next/link";
-
-const plans = [
-  {
-    name: "Starter",
-    price: "$19",
-    note: "per org / month",
-    features: ["Up to 5 users", "Projects and tasks", "Basic reports"],
-  },
-  {
-    name: "Growth",
-    price: "$49",
-    note: "per org / month",
-    features: ["Up to 25 users", "Approvals workflow", "Timesheets + analytics"],
-    highlight: true,
-  },
-  {
-    name: "Scale",
-    price: "$99",
-    note: "per org / month",
-    features: ["Unlimited users", "Advanced governance", "Priority support"],
-  },
-];
+import { pricingPlans } from "./pricingPlans";
 
 export default function HomePage() {
   return (
@@ -53,7 +32,7 @@ export default function HomePage() {
         </header>
 
         <section className="mt-10 grid gap-4 md:grid-cols-3">
-          {plans.map((plan) => (
+          {pricingPlans.map((plan) => (
             <article
               key={plan.name}
               className={`rounded-2xl border p-5 backdrop-blur-sm ${

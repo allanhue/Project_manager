@@ -8,6 +8,7 @@ import SystemAdminHome from "../system_admin/Home";
 import { AuthUser, getSession, getSystemAnalytics, getSystemLogs, getSystemUpdates, listProjects, listTasks, logout, SystemAnalytics, SystemLog, SystemUpdate } from "../auth/auth";
 import { Nav } from "../componets/Nav";
 import { LoadingSpinner } from "../componets/LoadingSpinner";
+import AccountPage from "./Account";
 import AnalyticsPage from "./Analytics";
 import ApprovalsPage from "./Approvals";
 import CalendarPage from "./Calendar";
@@ -22,7 +23,7 @@ import SettingsPage from "./Settings";
 import TasksPage from "./Task";
 import TimesheetsPage from "./Timesheets";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "approvals" | "forum" | "devshare" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "approvals" | "forum" | "devshare" | "issues" | "account" | "profile" | "settings" | "admin";
 
 function DashboardOverview({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
   const [projectCount, setProjectCount] = useState(0);
@@ -288,6 +289,7 @@ export default function Dashboard() {
     if (currentPage === "forum") return <ForumPage searchQuery={searchQuery} />;
     if (currentPage === "devshare") return <DevsharePage searchQuery={searchQuery} />;
     if (currentPage === "issues") return <IssuesPage searchQuery={searchQuery} />;
+    if (currentPage === "account") return <AccountPage />;
     if (currentPage === "profile" && user) return <ProfilePage user={user} />;
     if (currentPage === "settings") return <SettingsPage />;
     if (currentPage === "admin") return <DashboardOverview onNavigate={setCurrentPage} />;

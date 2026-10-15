@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { listProjects, Project } from "../auth/auth";
 
-type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "approvals" | "forum" | "devshare" | "issues" | "profile" | "settings" | "admin";
+type PageKey = "dashboard" | "projects" | "tasks" | "timesheets" | "analytics" | "reports" | "calendar" | "approvals" | "forum" | "devshare" | "issues" | "account" | "profile" | "settings" | "admin";
 
 const menu: Array<{ key: PageKey; label: string; icon: ReactNode }> = [
   {
@@ -128,6 +128,16 @@ const menu: Array<{ key: PageKey; label: string; icon: ReactNode }> = [
     ),
   },
   {
+    key: "account",
+    label: "Account",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3.5 12h17M12 3c2.2 2.4 3.3 5.4 3.3 9s-1.1 6.6-3.3 9c-2.2-2.4-3.3-5.4-3.3-9S9.8 5.4 12 3z" />
+      </svg>
+    ),
+  },
+  {
     key: "settings",
     label: "Settings",
     icon: (
@@ -164,11 +174,11 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
   const visibleMenu =
     role === "system_admin"
       ? menu.filter((item) => item.key === "dashboard" || item.key === "analytics" || item.key === "calendar" || item.key === "admin")
-      : menu.filter((item) => item.key !== "admin" && item.key !== "profile" && item.key !== "settings");
+      : menu.filter((item) => item.key !== "admin" && item.key !== "account" && item.key !== "profile" && item.key !== "settings");
   const bottomMenu =
     role === "system_admin"
       ? menu.filter((item) => item.key === "settings")
-      : menu.filter((item) => item.key === "profile" || item.key === "settings");
+      : menu.filter((item) => item.key === "account" || item.key === "profile" || item.key === "settings");
   const [ongoingProjects, setOngoingProjects] = useState<Project[]>([]);
 
   useEffect(() => {
@@ -322,7 +332,14 @@ export function Sidebar({ currentPage, onNavigate, role, isSystemAdmin, collapse
             ) : (
               item.icon
             );
-            const label = role === "system_admin" ? "Help & Config" : item.key === "settings" ? "Help & Settings" : "Profile";
+            const label =
+              role === "system_admin"
+                ? "Help & Config"
+                : item.key === "settings"
+                  ? "Help & Settings"
+                  : item.key === "account"
+                    ? "Account"
+                    : "Profile";
 
             return (
               <li key={`bottom-${item.key}`}>
