@@ -157,6 +157,7 @@ export type ForumPost = {
   title: string;
   body: string;
   created_at: string;
+  tags: string[];
 };
 
 export type CodeShare = {
@@ -182,7 +183,10 @@ export type IssueItem = {
   status: string;
   created_by_email: string;
   created_at: string;
+  tags: string[];
 };
+
+export type DiscussionComment = { id: number; entity_id: number; author_email: string; body: string; created_at: string };
 
 export type SystemUpdate = {
   id: number;
@@ -817,7 +821,7 @@ export async function listForumPosts(): Promise<ForumPost[]> {
   return payload.items || [];
 }
 
-export async function createForumPost(input: { title: string; body: string }): Promise<ForumPost> {
+export async function createForumPost(input: { title: string; body: string; tags?: string[] }): Promise<ForumPost> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
   return requestJSON<ForumPost>("/api/v1/forum/posts", {
@@ -828,6 +832,17 @@ export async function createForumPost(input: { title: string; body: string }): P
     },
     body: JSON.stringify(input),
   });
+}
+
+export async function listDiscussionComments(kind: "issues" | "forum/posts", id: number): Promise<DiscussionComment[]> {
+  const token = getAuthToken(); if (!token) throw new Error("Please login first.");
+  const payload = await requestJSON<{ items: DiscussionComment[] }>(`/api/v1/${kind}/${id}/comments`, { method: "GET", headers: { Authorization: `Bearer ${token}` } });
+  return payload.items || [];
+}
+
+export async function createDiscussionComment(kind: "issues" | "forum/posts", id: number, body: string): Promise<DiscussionComment> {
+  const token = getAuthToken(); if (!token) throw new Error("Please login first.");
+  return requestJSON<DiscussionComment>(`/api/v1/${kind}/${id}/comments`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ body }) });
 }
 
 export async function listCodeShares(): Promise<CodeShare[]> {
@@ -886,6 +901,7 @@ export async function createIssue(input: {
   title: string;
   description: string;
   severity?: string;
+  tags?: string[];
 }): Promise<IssueItem> {
   const token = getAuthToken();
   if (!token) throw new Error("Please login first.");
