@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { createForumPost, deleteForumPost, ForumPost, listForumPosts } from "../auth/auth";
 import { LoadingSpinner } from "../componets/LoadingSpinner";
+import { DiscussionComments } from "./DiscussionComments";
 
 type ForumPageProps = {
   searchQuery?: string;
@@ -13,6 +14,7 @@ export default function ForumPage({ searchQuery = "" }: ForumPageProps) {
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [tags, setTags] = useState("");
   const [status, setStatus] = useState("");
 
   const [openMenuPostId, setOpenMenuPostId] = useState<number | null>(null);
@@ -73,10 +75,11 @@ export default function ForumPage({ searchQuery = "" }: ForumPageProps) {
     if (!title.trim() || !body.trim()) return;
     setStatus("Posting...");
     try {
-      const post = await createForumPost({ title: title.trim(), body: body.trim() });
+      const post = await createForumPost({ title: title.trim(), body: body.trim(), tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean) });
       setPosts((prev) => [post, ...prev]);
       setTitle("");
       setBody("");
+      setTags("");
       setStatus("Posted.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to post.");
@@ -108,6 +111,7 @@ export default function ForumPage({ searchQuery = "" }: ForumPageProps) {
         <div className="grid gap-3">
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Topic title" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
           <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="Start discussion..." className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags (comma separated, e.g. idea, announcement)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div className="mt-3 flex items-center justify-between">
           {status ? <p className="text-sm text-slate-600">{status}</p> : <span />}
@@ -138,9 +142,11 @@ export default function ForumPage({ searchQuery = "" }: ForumPageProps) {
                 <div className="flex-1">
                   <h3 className="text-sm font-semibold text-slate-900">{post.title}</h3>
                   <p className="mt-2 text-sm text-slate-700">{post.body}</p>
+                  {post.tags?.length ? <div className="mt-2 flex flex-wrap gap-2">{post.tags.map((tag) => <span key={tag} className="rounded-full bg-indigo-50 px-2 py-1 text-xs text-indigo-700">#{tag}</span>)}</div> : null}
                   <p className="mt-2 text-xs text-slate-500">
                     {post.author_email} • {new Date(post.created_at).toLocaleString()}
                   </p>
+                  <DiscussionComments kind="forum/posts" id={post.id} />
                 </div>
               </div>
               <div className="relative ml-4">

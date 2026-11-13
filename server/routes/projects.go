@@ -171,6 +171,7 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			body TEXT NOT NULL,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
+		ALTER TABLE forum_posts ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
 		CREATE INDEX IF NOT EXISTS idx_forum_posts_tenant_id ON forum_posts (tenant_id);
 
 		CREATE TABLE IF NOT EXISTS code_shares (
@@ -198,7 +199,19 @@ func (s *Service) EnsureBaseTables(ctx context.Context) error {
 			created_by_email TEXT NOT NULL,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
+		ALTER TABLE issues ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb;
 		CREATE INDEX IF NOT EXISTS idx_issues_tenant_id ON issues (tenant_id);
+
+		CREATE TABLE IF NOT EXISTS discussion_comments (
+			id BIGSERIAL PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			entity_type TEXT NOT NULL CHECK (entity_type IN ('issue', 'forum')),
+			entity_id BIGINT NOT NULL,
+			author_email TEXT NOT NULL,
+			body TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_discussion_comments_entity ON discussion_comments (tenant_id, entity_type, entity_id, id);
 
 		CREATE TABLE IF NOT EXISTS notifications (
 			id BIGSERIAL PRIMARY KEY,

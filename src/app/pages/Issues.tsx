@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { createIssue, IssueItem, listIssues, listProjects, Project } from "../auth/auth";
 import { LoadingSpinner } from "../componets/LoadingSpinner";
+import { DiscussionComments } from "./DiscussionComments";
 
 type IssuesPageProps = {
   searchQuery?: string;
@@ -17,6 +18,7 @@ export default function IssuesPage({ searchQuery = "" }: IssuesPageProps) {
   const [severity, setSeverity] = useState("medium");
   const [projectID, setProjectID] = useState("");
   const [status, setStatus] = useState("");
+  const [tags, setTags] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -46,12 +48,14 @@ export default function IssuesPage({ searchQuery = "" }: IssuesPageProps) {
         title: title.trim(),
         description: description.trim(),
         severity,
+        tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
       });
       setIssues((prev) => [issue, ...prev]);
       setTitle("");
       setDescription("");
       setSeverity("medium");
       setProjectID("");
+      setTags("");
       setStatus("Issue created.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to create issue.");
@@ -83,6 +87,7 @@ export default function IssuesPage({ searchQuery = "" }: IssuesPageProps) {
             <option value="critical">critical</option>
           </select>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Issue title" className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2" />
+          <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags (comma separated, e.g. bug, urgent)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2" />
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Describe issue..." className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2" />
         </div>
         <div className="mt-3 flex items-center justify-between">
@@ -101,10 +106,12 @@ export default function IssuesPage({ searchQuery = "" }: IssuesPageProps) {
               <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">{issue.severity}</span>
             </div>
             <p className="mt-2 text-sm text-slate-700">{issue.description}</p>
+            {issue.tags?.length ? <div className="mt-2 flex flex-wrap gap-2">{issue.tags.map((tag) => <span key={tag} className="rounded-full bg-indigo-50 px-2 py-1 text-xs text-indigo-700">#{tag}</span>)}</div> : null}
             <p className="mt-2 text-xs text-slate-500">
               {issue.project_name ? `Project: ${issue.project_name} • ` : ""}
               {new Date(issue.created_at).toLocaleString()}
             </p>
+            <DiscussionComments kind="issues" id={issue.id} />
           </article>
         ))}
       </div>
